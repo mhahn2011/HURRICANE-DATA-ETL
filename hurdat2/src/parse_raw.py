@@ -31,10 +31,12 @@ def parse_hurdat2_file(file_path):
                 continue
 
             # Check if this is a header line (storm info)
-            if line.count(',') == 2:  # Header format: ID, NAME, NUM_RECORDS
-                parts = [p.strip() for p in line.split(',')]
-                current_storm_id = parts[0]
-                current_storm_name = parts[1]
+            # Format: AL092021,                IDA,     40,
+            parts = [p.strip() for p in line.split(',')]
+            if len(parts) >= 3 and len(parts) <= 4 and parts[0].startswith('AL') and parts[2].isdigit():
+                current_storm_id = parts[0].strip()
+                current_storm_name = parts[1].strip() if parts[1].strip() else 'UNNAMED'
+                print(f"Found storm: {current_storm_id} - {current_storm_name}")
                 continue
 
             # This is a data line (track point)
@@ -52,6 +54,22 @@ def parse_hurdat2_file(file_path):
                 lon_str = parts[5]
                 max_wind = int(parts[6]) if parts[6] != '-999' else None
                 min_pressure = int(parts[7]) if len(parts) > 7 and parts[7] != '-999' else None
+
+                # Parse wind radii (nautical miles) - modern HURDAT2 format
+                wind_radii_34_ne = int(parts[8]) if len(parts) > 8 and parts[8] != '-999' and parts[8] != '0' else None
+                wind_radii_34_se = int(parts[9]) if len(parts) > 9 and parts[9] != '-999' and parts[9] != '0' else None
+                wind_radii_34_sw = int(parts[10]) if len(parts) > 10 and parts[10] != '-999' and parts[10] != '0' else None
+                wind_radii_34_nw = int(parts[11]) if len(parts) > 11 and parts[11] != '-999' and parts[11] != '0' else None
+
+                wind_radii_50_ne = int(parts[12]) if len(parts) > 12 and parts[12] != '-999' and parts[12] != '0' else None
+                wind_radii_50_se = int(parts[13]) if len(parts) > 13 and parts[13] != '-999' and parts[13] != '0' else None
+                wind_radii_50_sw = int(parts[14]) if len(parts) > 14 and parts[14] != '-999' and parts[14] != '0' else None
+                wind_radii_50_nw = int(parts[15]) if len(parts) > 15 and parts[15] != '-999' and parts[15] != '0' else None
+
+                wind_radii_64_ne = int(parts[16]) if len(parts) > 16 and parts[16] != '-999' and parts[16] != '0' else None
+                wind_radii_64_se = int(parts[17]) if len(parts) > 17 and parts[17] != '-999' and parts[17] != '0' else None
+                wind_radii_64_sw = int(parts[18]) if len(parts) > 18 and parts[18] != '-999' and parts[18] != '0' else None
+                wind_radii_64_nw = int(parts[19]) if len(parts) > 19 and parts[19] != '-999' and parts[19] != '0' else None
 
                 # Parse coordinates
                 lat = parse_coordinate(lat_str)
@@ -73,7 +91,20 @@ def parse_hurdat2_file(file_path):
                     'lon': lon,
                     'max_wind': max_wind,
                     'min_pressure': min_pressure,
-                    'category': category
+                    'category': category,
+                    # Wind radii in nautical miles
+                    'wind_radii_34_ne': wind_radii_34_ne,
+                    'wind_radii_34_se': wind_radii_34_se,
+                    'wind_radii_34_sw': wind_radii_34_sw,
+                    'wind_radii_34_nw': wind_radii_34_nw,
+                    'wind_radii_50_ne': wind_radii_50_ne,
+                    'wind_radii_50_se': wind_radii_50_se,
+                    'wind_radii_50_sw': wind_radii_50_sw,
+                    'wind_radii_50_nw': wind_radii_50_nw,
+                    'wind_radii_64_ne': wind_radii_64_ne,
+                    'wind_radii_64_se': wind_radii_64_se,
+                    'wind_radii_64_sw': wind_radii_64_sw,
+                    'wind_radii_64_nw': wind_radii_64_nw
                 }
 
                 records.append(record)
