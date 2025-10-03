@@ -184,11 +184,14 @@ Calculate shortest perpendicular distance from tract centroid to storm track.
 **Method**: Use Shapely's `distance()` between point and LineString
 
 ### 5.2 Maximum Wind Speed Experienced
-Calculate peak wind speed at tract location using linear interpolation.
+Calculate peak wind speed at tract location using the linear decay model implemented in
+`integration/src/wind_interpolation.py` (track-centre interpolation + envelope-based
+attenuation).
 
 **Method**:
 - Find closest point on storm track to tract centroid
-- Linear interpolation: `max_wind` (at track center) → 64 knots (at envelope boundary)
+- Linear interpolation: `max_wind` at nearest track point → 64 kt at envelope boundary
+- Use ray/envelope intersection distance ratio to scale the decay
 
 ### 5.3 Duration of Wind Exposure
 Calculate time tract experienced winds above threshold.
