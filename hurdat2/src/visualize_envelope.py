@@ -8,6 +8,8 @@ import numpy as np
 import geopandas as gpd
 from shapely.geometry import MultiPolygon, LineString
 from pathlib import Path
+import math
+import pandas as pd
 
 
 # Gulf Coast Cities for Reference
@@ -246,8 +248,98 @@ Lon: {bounds[0]:.1f}° to {bounds[2]:.1f}°W"""
     return fig
 
 
+def save_qa_envelope_plot(storm_track_df, track_line, output_path, envelope_poly=None, envelopes_dict=None, hull_points=None):
+    """
+    Creates a QA/QC visualization for a storm envelope.
+
+    Can plot either a single envelope or compare multiple envelopes from a dictionary.
+
+    Args:
+        storm_track_df (pd.DataFrame): DataFrame for the storm track.
+        track_line (LineString): The geometry of the storm's track.
+        output_path (str or Path): The file path to save the output PNG image.
+        envelope_poly (Polygon, optional): A single envelope geometry to plot.
+        envelopes_dict (dict, optional): A dictionary of envelopes to compare,
+                                        where keys are labels and values are geometries.
+        hull_points (list, optional): A list of shapely.geometry.Point objects to plot.
+    """
+    
+    import matplotlib.patches as mpatches
+    fig, ax = plt.subplots(1, 1, figsize=(15, 10))
+
+    # Plot the storm track first
+    ax.plot(*track_line.xy, 'k-', label='Storm Track', zorder=5)
+    ax.plot(storm_track_df['lon'], storm_track_df['lat'], 'ko', markersize=3, zorder=5)
+
+    # Plot hull points if provided
+    if hull_points:
+        hull_x = [p.x for p in hull_points]
+        hull_y = [p.y for p in hull_points]
+        ax.plot(hull_x, hull_y, 'rx', markersize=5, label='Hull Points')
+
+    # Define a list of colors for the different envelopes
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']
+
+    # Helper to plot complex geometries
+    def plot_geom(geom, color, label):
+        if geom.is_empty:
+            return
+        if geom.geom_type == 'Polygon':
+            ax.fill(*geom.exterior.xy, fc=color, ec='black', alpha=0.4, label=label, zorder=2)
+        elif geom.geom_type == 'MultiPolygon':
+            for i, poly in enumerate(geom.geoms):
+                ax.fill(*poly.exterior.xy, fc=color, ec='black', alpha=0.4, zorder=2, label=label if i == 0 else "")
+        elif geom.geom_type == 'LineString':
+            ax.plot(*geom.xy, color=color, zorder=2, linewidth=2)
+        elif geom.geom_type == 'GeometryCollection':
+            for i, g in enumerate(geom.geoms):
+                plot_geom(g, color, label if i == 0 else "")
+
+    # Determine what to plot
+    storm_name = storm_track_df['storm_name'].iloc[0]
+    storm_year = storm_track_df['year'].iloc[0]
+    title_text = f"QA Envelope for {storm_name} ({storm_year})" # Default title
+    legend_handles = []
+
+    if envelopes_dict:
+        # Plot each envelope from the dictionary for sensitivity analysis
+        for i, (label, envelope) in enumerate(envelopes_dict.items()):
+            color = colors[i % len(colors)]
+            plot_geom(envelope, color=color, label=label)
+            legend_handles.append(mpatches.Patch(color=color, label=label, alpha=0.4))
+        title_text = f"Concave Hull Sensitivity for {storm_name} ({storm_year})"
+    elif envelope_poly:
+        # Plot a single envelope for QA
+        plot_geom(envelope_poly, color=colors[0], label='64kt Envelope')
+        legend_handles.append(mpatches.Patch(color=colors[0], label='64kt Envelope', alpha=0.4))
+    else:
+        # No geometry to plot
+        plt.close(fig)
+        print("⚠️ Warning: No envelope provided to `save_qa_envelope_plot`. Nothing to plot.")
+        return
+
+    # Set plot labels and title
+    ax.set_xlabel("Longitude")
+    ax.set_ylabel("Latitude")
+    ax.set_title(title_text)
+    ax.legend(handles=legend_handles)
+    ax.grid(True)
+    ax.set_aspect('equal', adjustable='box')
+    
+    # Save the figure
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.close(fig)
+    
+    if envelopes_dict:
+        print(f"💾 Saved sensitivity analysis plot to: {output_path}")
+    else:
+        print(f"💾 Saved QA plot to: {output_path}")
+
+
 if __name__ == "__main__":
-    # Test visualization
+    # Test QA visualization
     import sys
     sys.path.insert(0, str(Path(__file__).parent))
 
@@ -256,7 +348,7 @@ if __name__ == "__main__":
     from envelope_algorithm import create_storm_envelope
 
     print("=" * 60)
-    print("HURRICANE IDA 2021: MAP VISUALIZATION")
+    print("QA/QC VISUALIZATION: HURRICANE IDA (2021)")
     print("=" * 60)
 
     # Load data
@@ -270,17 +362,22 @@ if __name__ == "__main__":
         (df_clean['year'] == 2021)
     ].sort_values('date').reset_index(drop=True)
 
-    print(f"\nCreating envelope for Hurricane Ida ({len(ida_track)} points)...")
-    envelope, track_line, diagnostics = create_storm_envelope(ida_track, verbose=False)
+    print(f"\nCreating 64kt envelope for Hurricane Ida ({len(ida_track)} points)...")
+    # Explicitly create the 64kt envelope for the QA plot
+    envelope_64kt, track_line, diagnostics = create_storm_envelope(ida_track, wind_threshold='64kt', verbose=False)
 
-    # Create visualization
-    output_file = Path(__file__).parent.parent / "outputs" / "hurricane_ida_map.png"
-    fig = create_map_visualization(
-        envelope, track_line, ida_track,
-        output_path=output_file,
-        title="Hurricane Ida 2021: Storm Envelope with Gulf Coast Cities"
-    )
+    if envelope_64kt:
+        # Define output path for the new QA plot
+        output_file_qa = Path(__file__).parent.parent / "outputs" / "hurricane_ida_64kt_qa.png"
 
-    print(f"\n✅ Visualization complete!")
-    print(f"   Envelope area: {envelope.area:.2f} sq degrees")
-    print(f"   Output: {output_file}")
+        # Call the new QA plotting function
+        save_qa_envelope_plot(
+            storm_track_df=ida_track,
+            envelope_poly=envelope_64kt,
+            track_line=track_line,
+            output_path=output_file_qa
+        )
+        print(f"\n✅ QA Visualization complete!")
+        print(f"   64kt Envelope area: {envelope_64kt.area:.2f} sq degrees")
+    else:
+        print("\n❌ Could not create envelope. Skipping visualization.")
