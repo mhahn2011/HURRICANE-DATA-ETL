@@ -159,6 +159,21 @@ Create storm-tract lookup table by testing which census tract centroids fall wit
 
 ---
 
+## Concave Hull + Centroid Analysis Intention
+
+**Project intention**: Combine storm-path geometries into a concave-hull polygon, determine which census-tract centroids fall inside, compute their distance to the storm path, and deliver the results via an interactive Folium map (zoom, layer toggles, centroid metadata).
+
+**Planned steps**:
+1. **Build the concave hull** – Generate the hull with shapely/alphashape and store it in a GeoPandas GeoDataFrame.
+2. **Prepare track centroids** – Compute tract centroids, keep identifying attributes, and persist them in a GeoDataFrame.
+3. **Spatial query** – Spatially join centroids and hull to flag points that lie inside.
+4. **Distance calculation** – For inside centroids, compute shapely distance to the storm path and append the value to the GeoDataFrame.
+5. **Visualization with Folium** – Render hull, storm path, and centroids as interactive layers with popups showing tract name and distance, enabling pan/zoom exploration.
+
+This adds an exploratory layer on top of the analytical pipeline, marrying GeoPandas/shapely workflows with Folium’s interactivity.
+
+---
+
 ## Step 5: MVP Feature Extraction
 
 Extract core features for each storm-tract combination. Focus on essential metrics only.
