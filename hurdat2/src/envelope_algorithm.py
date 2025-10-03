@@ -163,13 +163,18 @@ def alpha_shape(points, alpha):
     """
     from scipy.spatial import Delaunay
     from shapely.ops import unary_union
+    from scipy.spatial.qhull import QhullError
 
     if len(points) < 4:
         # Alpha shape requires at least 3 points to form a triangle.
         return MultiPoint(points).convex_hull
 
     coords = np.array([p.coords[0] for p in points])
-    tri = Delaunay(coords)
+    try:
+        tri = Delaunay(coords, qhull_options='QJ')
+    except QhullError:
+        # Fallback to convex hull if Delaunay fails even with joggling
+        return MultiPoint(points).convex_hull
 
     triangles = []
     for i in tri.simplices:
@@ -180,7 +185,12 @@ def alpha_shape(points, alpha):
         b = np.linalg.norm(pts[1] - pts[2])
         c = np.linalg.norm(pts[2] - pts[0])
         s = (a + b + c) / 2.0
-        area = math.sqrt(s * (s - a) * (s - b) * (s - c))
+        area_squared = s * (s - a) * (s - b) * (s - c)
+        if area_squared < 0:
+            area = 0
+        else:
+            area = math.sqrt(area_squared)
+        
         # Area can be zero for collinear points, handle this.
         if area > 1e-12:
             circum_r = (a * b * c) / (4.0 * area)
@@ -205,37 +215,51 @@ def create_storm_envelope(storm_track, wind_threshold='64kt', alpha=0.2, verbose
     radii_cols = [f'wind_radii_{wind_threshold.replace("kt", "")}_{d}' for d in ['ne', 'se', 'sw', 'nw']]
 
     storm_track['has_radii'] = storm_track[radii_cols].gt(0).any(axis=1)
-    storm_track['segment_id'] = (storm_track['has_radii'] != storm_track['has_radii'].shift()).cumsum()
+
+    # --- New Logic: Threshold-based Segmentation ---
+    segment_ids = []
+    current_segment = 1
+    gap_counter = 0
+    in_gap = False
+
+    # First, determine where the long gaps are to define the segments
+    for has_radii_val in storm_track['has_radii']:
+        if not has_radii_val:
+            gap_counter += 1
+            in_gap = True
+        else: # has_radii_val is True
+            if in_gap and gap_counter >= 5:
+                current_segment += 1
+            gap_counter = 0
+            in_gap = False
+        segment_ids.append(current_segment)
+    
+    storm_track['segment_id'] = segment_ids
 
     for seg_id, segment_df in storm_track.groupby('segment_id'):
-        is_hull_segment = segment_df['has_radii'].all()
+        # For each segment, generate one hull from all its points
+        all_points_for_hull = []
+        
+        # Add all track points in the segment
         track_points_in_segment = [Point(p.lon, p.lat) for p in segment_df.itertuples()]
+        all_points_for_hull.extend(track_points_in_segment)
 
-        if is_hull_segment:
-            if verbose: print(f"  Processing segment {seg_id} as Alpha Shape ({len(segment_df)} points)")
-            all_points_for_hull = list(track_points_in_segment)
-            
-            for i, row in segment_df.iterrows():
+        # Add all wind extent points from the segment (where they exist)
+        for i, row in segment_df.iterrows():
+            if row['has_radii']:
                 wind_points = get_wind_extent_points(row, wind_threshold=wind_threshold)
                 for wp in wind_points:
                     all_points_for_hull.append(Point(wp['lon'], wp['lat']))
-            
-            all_hull_points.extend(all_points_for_hull) # Collect points
+        
+        all_hull_points.extend(all_points_for_hull) # Collect points for visualization
 
-            if len(all_points_for_hull) >= 4:
-                hull = alpha_shape(all_points_for_hull, alpha=alpha)
-                polygons.append(hull)
-            elif len(all_points_for_hull) >= 3:
-                hull = MultiPoint(all_points_for_hull).convex_hull
-                polygons.append(hull)
-            else:
-                lines.append(LineString(track_points_in_segment))
-        else:
-            if verbose: print(f"  Processing segment {seg_id} as LineString ({len(segment_df)} points)")
-            if len(track_points_in_segment) > 1:
-                # Buffer the line to create a thin polygon to bridge gaps
-                line_bridge = LineString(track_points_in_segment).buffer(0.01)
-                polygons.append(line_bridge)
+        # Now, create a hull from all these points for the segment
+        if len(all_points_for_hull) >= 4:
+            hull = alpha_shape(all_points_for_hull, alpha=alpha)
+            polygons.append(hull)
+        elif len(all_points_for_hull) >= 3:
+            hull = MultiPoint(all_points_for_hull).convex_hull
+            polygons.append(hull)
 
     # Union geometries one by one for robustness
     final_geom = None

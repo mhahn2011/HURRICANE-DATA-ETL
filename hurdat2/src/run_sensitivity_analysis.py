@@ -16,11 +16,24 @@ from visualize_envelope import save_qa_envelope_plot
 # List of notable Gulf Coast hurricanes to generate QA plots for
 STORMS_TO_PROCESS = [
     ('KATRINA', 2005),
+    ('RITA', 2005),
+    ('DENNIS', 2005),
+    ('GUSTAV', 2008),
+    ('IKE', 2008),
+    ('HARVEY', 2017),
+    ('IRMA', 2017),
+    ('MICHAEL', 2018),
+    ('LAURA', 2020),
+    ('DELTA', 2020),
+    ('ZETA', 2020),
+    ('SALLY', 2020),
+    ('IDA', 2021),
+    ('IAN', 2022),
 ]
 
 # Alpha values to test for the alpha shape algorithm
 # Larger alpha = tighter fit
-ALPHAS_TO_TEST = [0.1]
+ALPHAS_TO_TEST = [0.4, 0.5, 0.6]
 
 def main():
     """Main function to drive the batch processing of QA plots."""
