@@ -17,23 +17,15 @@ from tract_centroids import load_tracts_with_centroids
 def main():
     print("Creating Interactive Folium Map with Census Tracts")
 
-    # 1. Load 456 tracts within envelope
-    tract_pairs = pd.read_csv(REPO_ROOT / "hurdat2/outputs/ida_tract_pairs.csv")
-    tract_pairs['tract_geoid'] = tract_pairs['tract_geoid'].astype(str)
-    envelope_geoids = tract_pairs['tract_geoid'].tolist()
-    print(f"Loaded {len(envelope_geoids)} tracts within envelope")
+    # Load features from wind coverage envelope (new accurate method)
+    features_path = REPO_ROOT / "integration/outputs/ida_features_final.csv"
+    if not features_path.exists():
+        print(f"⚠️  {features_path} not found, using fallback")
+        features_path = REPO_ROOT / "integration/outputs/ida_features_complete.csv"
 
-    # 2. Load features for these tracts
-    all_features = pd.read_csv(REPO_ROOT / "integration/outputs/ida_features_complete.csv")
-    all_features['tract_geoid'] = all_features['tract_geoid'].astype(str)
-    envelope_features = all_features[
-        all_features['tract_geoid'].isin(envelope_geoids)
-    ].copy()
-    print(f"Filtered to {len(envelope_features)} tracts with features")
-
-    # 3. No need to load centroids separately, they are in the features file
-    viz_data = envelope_features
-    print(f"Final data: {len(viz_data)} tracts ready for mapping")
+    viz_data = pd.read_csv(features_path)
+    viz_data['tract_geoid'] = viz_data['tract_geoid'].astype(str)
+    print(f"Loaded {len(viz_data)} tracts with wind coverage envelope filtering")
 
     # 5. Load Ida track and envelope
     hurdat_path = REPO_ROOT / "hurdat2/input_data/hurdat2-atlantic.txt"
