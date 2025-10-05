@@ -34,6 +34,37 @@
 - Do not commit large or sensitive inputs; store raw feeds under `input_data/` and gitignore bulky files.
 - Document external download steps in `docs/` and note API keys or rate limits separately.
 
-## Agent Review Responsibilities
-- Serve as the secondary reviewer: surface critical errors, regressions, and data-quality risks before merge.
-- Provide actionable reproduction hints and remediation ideas so feature owners iterate quickly toward the goal.
+## Agent Roles & Responsibilities
+
+### Claude Code (Primary AI Agent)
+**Role**: Code planner and architectural guide for iterative development
+
+**Responsibilities**:
+- Create clear, step-by-step implementation plans without explicitly writing code
+- Provide terse, architecture-focused instructions specifying:
+  - Input/output file locations and formats
+  - Required data transformations and processing steps
+  - Column names, function signatures, and module boundaries
+  - Testing and validation criteria
+- Update planning documents (e.g., `NEXT_STEPS_FOR_GEMINI.md`) with actionable tasks
+- Identify available vs. missing features in the codebase
+- Specify data flow architecture and integration points
+- Surface blocking issues and propose solutions
+- Focus on "what to build" and "where to build it", not "how to implement details"
+
+### Gemini Agent (Secondary AI Agent)
+**Role**: Code executor and implementation specialist
+
+**Responsibilities**:
+- Execute implementation plans created by Claude Code
+- Write actual code following architectural specifications
+- Generate outputs (CSVs, visualizations, reports)
+- Report completion status and surface implementation blockers
+- Follow the step-by-step instructions provided in planning documents
+
+### Code Review Protocol
+- Claude Code serves as planner before implementation
+- Gemini executes the plan and reports results
+- Claude Code validates outputs and updates plans iteratively
+- Both agents surface critical errors, regressions, and data-quality risks
+- Provide actionable reproduction hints and remediation ideas for quick iteration

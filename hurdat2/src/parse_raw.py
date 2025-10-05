@@ -71,6 +71,12 @@ def parse_hurdat2_file(file_path):
                 wind_radii_64_sw = int(parts[18]) if len(parts) > 18 and parts[18] != '-999' and parts[18] != '0' else None
                 wind_radii_64_nw = int(parts[19]) if len(parts) > 19 and parts[19] != '-999' and parts[19] != '0' else None
 
+                radius_max_wind = (
+                    int(parts[20])
+                    if len(parts) > 20 and parts[20] not in {'-999', '0', ''}
+                    else None
+                )
+
                 # Parse coordinates
                 lat = parse_coordinate(lat_str)
                 lon = parse_coordinate(lon_str)
@@ -104,7 +110,8 @@ def parse_hurdat2_file(file_path):
                     'wind_radii_64_ne': wind_radii_64_ne,
                     'wind_radii_64_se': wind_radii_64_se,
                     'wind_radii_64_sw': wind_radii_64_sw,
-                    'wind_radii_64_nw': wind_radii_64_nw
+                    'wind_radii_64_nw': wind_radii_64_nw,
+                    'radius_max_wind': radius_max_wind,
                 }
 
                 records.append(record)

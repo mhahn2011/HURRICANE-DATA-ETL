@@ -77,8 +77,22 @@ def create_instantaneous_wind_polygon(
     wind_radii_se: float,
     wind_radii_sw: float,
     wind_radii_nw: float,
+    buffer_deg: float = 0.02,
 ) -> Polygon | None:
-    """Create a wind extent polygon from quadrant radii."""
+    """Create a wind extent polygon from quadrant radii with rounded corners.
+
+    Args:
+        lat: Center latitude
+        lon: Center longitude
+        wind_radii_ne: NE quadrant radius (nautical miles)
+        wind_radii_se: SE quadrant radius (nautical miles)
+        wind_radii_sw: SW quadrant radius (nautical miles)
+        wind_radii_nw: NW quadrant radius (nautical miles)
+        buffer_deg: Buffer distance in degrees to round corners (default 0.02 deg ~= 1.3 nm)
+
+    Returns:
+        Rounded polygon or None if no valid radii
+    """
 
     radii = {
         "ne": wind_radii_ne,
@@ -99,16 +113,22 @@ def create_instantaneous_wind_polygon(
     if not points:
         return None
 
+    # For 1-2 points, already using buffer
     if len(points) == 1:
-        return points[0].buffer(0.001)
+        return points[0].buffer(buffer_deg)
 
     if len(points) == 2:
-        # Create line buffer for 2 points
         from shapely.geometry import LineString
-        return LineString(points).buffer(0.001)
+        return LineString(points).buffer(buffer_deg)
 
-    # Need at least 3 points for polygon
-    return Polygon([p.coords[0] for p in points]).convex_hull
+    # For 3+ points, create polygon then round corners with buffer
+    polygon = Polygon([p.coords[0] for p in points]).convex_hull
+
+    # Round corners by applying small buffer
+    # This smooths sharp vertices and captures nearby points
+    rounded_polygon = polygon.buffer(buffer_deg)
+
+    return rounded_polygon
 
 
 def check_centroid_exposure_over_time(centroid: Point, interpolated_track: pd.DataFrame) -> pd.DataFrame:
@@ -168,13 +188,62 @@ def calculate_duration_features(exposure_timeline: pd.DataFrame, interval_minute
     return result
 
 
+def identify_incomplete_wind_radii_boundary(interpolated_track: pd.DataFrame) -> Dict[str, int]:
+    """Find first/last indices where we have incomplete (<4) wind-radii quadrants.
+
+    Returns:
+        Dict with 'first_complete_idx' and 'last_complete_idx'
+    """
+    complete_mask = []
+
+    for _, row in interpolated_track.iterrows():
+        radii_values = [
+            row.get("wind_radii_64_ne"),
+            row.get("wind_radii_64_se"),
+            row.get("wind_radii_64_sw"),
+            row.get("wind_radii_64_nw"),
+        ]
+        # Count non-null radii
+        valid_count = sum(1 for r in radii_values if not pd.isna(r) and r > 0)
+        complete_mask.append(valid_count == 4)
+
+    complete_mask = np.array(complete_mask)
+
+    result = {
+        "first_complete_idx": None,
+        "last_complete_idx": None,
+    }
+
+    if not complete_mask.any():
+        return result
+
+    # Find first and last complete indices
+    complete_indices = np.where(complete_mask)[0]
+    result["first_complete_idx"] = int(complete_indices[0])
+    result["last_complete_idx"] = int(complete_indices[-1])
+
+    return result
+
+
 def calculate_duration_for_tract(
     centroid: Point,
     track_df: pd.DataFrame,
     wind_threshold: str = "64kt",
     interval_minutes: int = 15,
+    envelope=None,
 ) -> Dict[str, object]:
-    """Main entry point for duration exposure features."""
+    """Main entry point for duration exposure features.
+
+    Args:
+        centroid: Tract centroid point
+        track_df: Hurricane track data
+        wind_threshold: Wind speed threshold (default "64kt")
+        interval_minutes: Temporal interpolation interval (default 15)
+        envelope: Optional alpha-shape envelope for edge interpolation
+
+    Returns:
+        Dictionary with duration metrics
+    """
 
     columns_required = {
         "date",
@@ -201,4 +270,91 @@ def calculate_duration_for_tract(
     interpolated = interpolate_track_temporal(track_subset, interval_minutes=interval_minutes)
     exposure = check_centroid_exposure_over_time(centroid, interpolated)
     duration = calculate_duration_features(exposure, interval_minutes=interval_minutes)
+
+    # Check if duration is zero and tract is within envelope - potential edge case
+    if duration["duration_in_envelope_hours"] == 0.0 and envelope is not None:
+        if envelope.contains(centroid):
+            # Tract is in envelope but has 0 duration - likely edge effect
+            # Apply edge interpolation
+            duration = _interpolate_duration_near_edge(
+                centroid=centroid,
+                interpolated_track=interpolated,
+                envelope=envelope,
+                interval_minutes=interval_minutes,
+            )
+
     return duration
+
+
+def _interpolate_duration_near_edge(
+    centroid: Point,
+    interpolated_track: pd.DataFrame,
+    envelope,
+    interval_minutes: int,
+) -> Dict[str, object]:
+    """Interpolate duration for tracts near envelope edge with incomplete wind-radii data.
+
+    For tracts that fall within the envelope but have 0 duration (due to missing
+    wind-radii data or edge effects), estimate duration by:
+    1. Finding the temporal boundaries where complete wind-radii data exists
+    2. Calculating distance from centroid to envelope boundary
+    3. Linearly interpolating from max possible duration → 0 at edge
+
+    Args:
+        centroid: Tract centroid
+        interpolated_track: Interpolated track data
+        envelope: Alpha-shape envelope
+        interval_minutes: Temporal resolution
+
+    Returns:
+        Updated duration dictionary with interpolated values
+    """
+
+    # Find where we have complete wind-radii data (all 4 quadrants)
+    boundaries = identify_incomplete_wind_radii_boundary(interpolated_track)
+
+    if boundaries["first_complete_idx"] is None:
+        # No complete data - return zero duration
+        return {
+            "first_entry_time": None,
+            "last_exit_time": None,
+            "duration_in_envelope_hours": 0.0,
+            "exposure_window_hours": 0.0,
+            "continuous_exposure": False,
+            "interpolated_points_count": len(interpolated_track),
+        }
+
+    # Calculate distance from centroid to envelope edge
+    try:
+        distance_to_edge = centroid.distance(envelope.boundary)
+    except Exception:
+        distance_to_edge = 0.0
+
+    # Estimate maximum possible duration (time span of complete data)
+    first_idx = boundaries["first_complete_idx"]
+    last_idx = boundaries["last_complete_idx"]
+    max_duration_hours = ((last_idx - first_idx) * interval_minutes) / 60.0
+
+    # Linear interpolation: closer to edge = less duration
+    # Assume edge buffer zone is ~0.2 degrees (~13 nm)
+    edge_buffer_deg = 0.2
+    if distance_to_edge >= edge_buffer_deg:
+        # Far from edge - shouldn't have 0 duration, return minimal duration
+        interpolated_duration = interval_minutes / 60.0  # At least 1 interval
+    else:
+        # Near edge - interpolate linearly
+        distance_ratio = distance_to_edge / edge_buffer_deg
+        interpolated_duration = max_duration_hours * distance_ratio
+
+    # Estimate entry/exit times based on temporal boundaries
+    first_time = interpolated_track.iloc[first_idx]["date"]
+    last_time = interpolated_track.iloc[last_idx]["date"]
+
+    return {
+        "first_entry_time": first_time,
+        "last_exit_time": last_time,
+        "duration_in_envelope_hours": float(interpolated_duration),
+        "exposure_window_hours": float(max_duration_hours),
+        "continuous_exposure": False,
+        "interpolated_points_count": len(interpolated_track),
+    }

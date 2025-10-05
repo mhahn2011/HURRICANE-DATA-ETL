@@ -24,33 +24,15 @@ def main():
     print(f"Loaded {len(envelope_geoids)} tracts within envelope")
 
     # 2. Load features for these tracts
-    all_features = pd.read_csv(REPO_ROOT / "integration/outputs/ida_gulf_features.csv")
+    all_features = pd.read_csv(REPO_ROOT / "integration/outputs/ida_features_complete.csv")
     all_features['tract_geoid'] = all_features['tract_geoid'].astype(str)
     envelope_features = all_features[
         all_features['tract_geoid'].isin(envelope_geoids)
     ].copy()
     print(f"Filtered to {len(envelope_features)} tracts with features")
 
-    # 3. Load census tract centroids
-    tract_data = load_tracts_with_centroids(
-        year=2019,
-        states=['22', '28', '48', '01', '12'],
-        columns=['GEOID', 'STATEFP', 'COUNTYFP']
-    )
-    tract_data.centroids['GEOID'] = tract_data.centroids['GEOID'].astype(str)
-    envelope_centroids = tract_data.centroids[
-        tract_data.centroids['GEOID'].isin(envelope_geoids)
-    ].copy()
-    envelope_centroids['centroid_lat'] = envelope_centroids.geometry.y
-    envelope_centroids['centroid_lon'] = envelope_centroids.geometry.x
-
-    # 4. Merge features + coordinates
-    viz_data = envelope_features.merge(
-        envelope_centroids[['GEOID', 'STATEFP', 'COUNTYFP', 'centroid_lat', 'centroid_lon']],
-        left_on='tract_geoid',
-        right_on='GEOID',
-        how='inner'
-    )
+    # 3. No need to load centroids separately, they are in the features file
+    viz_data = envelope_features
     print(f"Final data: {len(viz_data)} tracts ready for mapping")
 
     # 5. Load Ida track and envelope
@@ -94,15 +76,16 @@ def main():
 
     # Add tract centroids with tooltips and popups
     tracts_layer = folium.FeatureGroup(name='Census Tract Centroids (456 affected)')
-    
+
     for idx, row in viz_data.iterrows():
         # Tooltip (hover) - NOW WITH FEATURES
         tooltip_html = f"""
         <b>Tract:</b> {row['tract_geoid']}<br>
         <b>Distance:</b> {row['distance_km']:.1f} km<br>
-        <b>Max Wind:</b> {row['max_wind_experienced_kt']:.1f} kt
+        <b>Max Wind:</b> {row['max_wind_experienced_kt']:.1f} kt<br>
+        <b>Duration:</b> {row['duration_in_envelope_hours']:.1f} hrs
         """
-    
+
         # Popup (click) - FULL DETAILS
         popup_html = f"""
         <div style="font-family: Arial; font-size: 12px;">
@@ -110,23 +93,33 @@ def main():
             <b>State:</b> {row['STATEFP']}<br>
             <b>County:</b> {row['COUNTYFP']}<br>
             <hr>
+            <b>── Exposure Metrics ──</b><br>
             <b>Distance to Track:</b> {row['distance_km']:.2f} km<br>
             <b>Max Wind Experienced:</b> {row['max_wind_experienced_kt']:.1f} kt<br>
+            <b>Duration in Envelope:</b> {row['duration_in_envelope_hours']:.1f} hours<br>
+            <b>First Entry:</b> {row['first_entry_time']}<br>
+            <b>Last Exit:</b> {row['last_exit_time']}<br>
             <hr>
+            <b>── Location ──</b><br>
             <b>Coordinates:</b> ({row['centroid_lat']:.4f}, {row['centroid_lon']:.4f})
         </div>
         """
-    
-        # Color by distance (same as before)
-        if row['distance_km'] < 50:
+
+        # Color by distance - NEW 10km increments
+        dist_km = row['distance_km']
+        if dist_km < 10:
             color = 'red'
-        elif row['distance_km'] < 100:
+        elif dist_km < 20:
             color = 'orange'
-        elif row['distance_km'] < 150:
+        elif dist_km < 30:
             color = 'yellow'
+        elif dist_km < 40:
+            color = 'lightgreen'
+        elif dist_km < 50:
+            color = 'blue'
         else:
-            color = 'green'
-    
+            color = 'gray'
+
         folium.CircleMarker(
             location=[row['centroid_lat'], row['centroid_lon']],
             radius=4,
@@ -137,44 +130,55 @@ def main():
             tooltip=folium.Tooltip(tooltip_html, sticky=True),  # ← Changed to Tooltip object
             popup=folium.Popup(popup_html, max_width=300)
         ).add_to(tracts_layer)
-    
+
     tracts_layer.add_to(m)
-    
+
     # Add layer control
     folium.LayerControl().add_to(m)
-    
+
     # ADD LEGEND (after layer control)
     legend_html = '''
     <div style="position: fixed; 
-        top: 10px; right: 10px; width: 180px; height: auto;
+        top: 10px; right: 10px; width: 200px;
         background-color: white; z-index:9999; font-size:12px;
         border:2px solid grey; border-radius: 5px; padding: 10px">
     
-        <p style="margin-bottom: 5px;"><b>Distance to Track</b></p>
-        <p style="margin-bottom: 3px;">
+        <p style="margin: 0 0 8px 0;"><b>Distance to Track</b></p>
+        <p style="margin: 3px 0;">
             <i style="background: red; width: 12px; height: 12px;
-               display: inline-block; border-radius: 50%; margin-right: 5px;"></i>
-            &lt; 50 km
+               display: inline-block; border-radius: 50%;"></i>
+            0-10 km
         </p>
-        <p style="margin-bottom: 3px;">
+        <p style="margin: 3px 0;">
             <i style="background: orange; width: 12px; height: 12px;
-               display: inline-block; border-radius: 50%; margin-right: 5px;"></i>
-            50-100 km
+               display: inline-block; border-radius: 50%;"></i>
+            10-20 km
         </p>
-        <p style="margin-bottom: 3px;">
+        <p style="margin: 3px 0;">
             <i style="background: yellow; width: 12px; height: 12px;
-               display: inline-block; border-radius: 50%; margin-right: 5px;"></i>
-            100-150 km
+               display: inline-block; border-radius: 50%;"></i>
+            20-30 km
         </p>
-        <p style="margin-bottom: 3px;">
-            <i style="background: green; width: 12px; height: 12px;
-               display: inline-block; border-radius: 50%; margin-right: 5px;"></i>
-            &gt; 150 km
+        <p style="margin: 3px 0;">
+            <i style="background: lightgreen; width: 12px; height: 12px;
+               display: inline-block; border-radius: 50%;"></i>
+            30-40 km
+        </p>
+        <p style="margin: 3px 0;">
+            <i style="background: blue; width: 12px; height: 12px;
+               display: inline-block; border-radius: 50%;"></i>
+            40-50 km
+        </p>
+        <p style="margin: 3px 0;">
+            <i style="background: gray; width: 12px; height: 12px;
+               display: inline-block; border-radius: 50%;"></i>
+            &gt; 50 km
         </p>
     </div>
     '''
     
     m.get_root().html.add_child(folium.Element(legend_html))
+
     # Save
     output_path = REPO_ROOT / "integration/outputs/ida_interactive_map.html"
     m.save(str(output_path))

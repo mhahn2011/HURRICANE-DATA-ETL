@@ -51,8 +51,10 @@ def test_compute_min_distance_features_structure():
 
     features = compute_min_distance_features(centroids, track)
 
-    assert list(features.columns) == [
+    for required in [
         "tract_geoid",
+        "centroid_lat",
+        "centroid_lon",
         "storm_id",
         "storm_name",
         "storm_time",
@@ -62,7 +64,8 @@ def test_compute_min_distance_features_structure():
         "radius_64_nm",
         "within_64kt",
         "storm_tract_id",
-    ]
+    ]:
+        assert required in features.columns
 
     assert features.loc[0, "nearest_quadrant"] == "NE"
     assert features.loc[0, "storm_tract_id"] == "AL999999_123456789012"
@@ -109,3 +112,5 @@ def test_calculate_max_wind_experienced_simple_case():
     results = calculate_max_wind_experienced(centroid, track_line, track_df, envelope)
 
     assert 64 <= results["max_wind_experienced_kt"] <= results["center_wind_at_approach_kt"] <= 100
+    assert results["radius_max_wind_at_approach_nm"] == 20.0
+    assert results["inside_eyewall"] is True

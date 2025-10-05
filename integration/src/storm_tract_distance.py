@@ -18,6 +18,8 @@ import sys
 from pathlib import Path
 from typing import Dict, Tuple
 
+from shapely.geometry import LineString, Point
+
 import numpy as np
 import pandas as pd
 
@@ -102,17 +104,29 @@ def compute_min_distance_features(
     track_lats = track["lat"].values
     track_lons = track["lon"].values
 
-    # Broadcast centroid distances to each track point (n_tracs x n_points)
-    distances_nm = haversine_nm(
+    if len(track_lats) >= 2:
+        track_geometry = LineString(list(zip(track_lons, track_lats)))
+    else:
+        track_geometry = Point(track_lons[0], track_lats[0])
+
+    min_dist_deg = []
+    for lon, lat in zip(centroid_lons, centroid_lats):
+        centroid_point = Point(lon, lat)
+        dist_deg = centroid_point.distance(track_geometry)
+        min_dist_deg.append(dist_deg)
+
+    min_dist_deg = np.array(min_dist_deg)
+    min_dist_nm = min_dist_deg * 60.0
+    min_dist_km = min_dist_nm * (EARTH_RADIUS_KM / EARTH_RADIUS_NM)
+
+    # Still need nearest track point for quadrant/wind radii
+    distances_to_points_nm = haversine_nm(
         centroid_lats[:, None],
         centroid_lons[:, None],
         track_lats[None, :],
         track_lons[None, :],
     )
-
-    min_idx = distances_nm.argmin(axis=1)
-    min_dist_nm = distances_nm.min(axis=1)
-    min_dist_km = min_dist_nm * (EARTH_RADIUS_KM / EARTH_RADIUS_NM)
+    min_idx = distances_to_points_nm.argmin(axis=1)
 
     nearest_track_rows = track.iloc[min_idx].reset_index(drop=True)
 
@@ -141,6 +155,10 @@ def compute_min_distance_features(
     result = pd.DataFrame(
         {
             "tract_geoid": centroids["GEOID"].values,
+            "STATEFP": centroids["STATEFP"].values,
+            "COUNTYFP": centroids["COUNTYFP"].values,
+            "centroid_lat": centroid_lats,
+            "centroid_lon": centroid_lons,
             "storm_id": nearest_track_rows["storm_id"].values,
             "storm_name": nearest_track_rows["storm_name"].values,
             "storm_time": nearest_track_rows["date"].values,
@@ -189,13 +207,38 @@ def run_pipeline(args: argparse.Namespace) -> pd.DataFrame:
 
     wind_rows = []
     duration_rows = []
-    for centroid_geom in centroids_in_envelope.geometry:
+    for idx, centroid_geom in enumerate(centroids_in_envelope.geometry):
+        # Extract wind radii from the nearest track point for this centroid
+        nearest_point = track_line.interpolate(track_line.project(centroid_geom))
+        track_distances = track.apply(
+            lambda row: ((row['lat'] - nearest_point.y) ** 2 + (row['lon'] - nearest_point.x) ** 2) ** 0.5,
+            axis=1
+        )
+        nearest_track_idx = track_distances.idxmin()
+        nearest_track_row = track.loc[nearest_track_idx]
+
+        wind_radii = {
+            "wind_radii_34_ne": nearest_track_row.get("wind_radii_34_ne"),
+            "wind_radii_34_se": nearest_track_row.get("wind_radii_34_se"),
+            "wind_radii_34_sw": nearest_track_row.get("wind_radii_34_sw"),
+            "wind_radii_34_nw": nearest_track_row.get("wind_radii_34_nw"),
+            "wind_radii_50_ne": nearest_track_row.get("wind_radii_50_ne"),
+            "wind_radii_50_se": nearest_track_row.get("wind_radii_50_se"),
+            "wind_radii_50_sw": nearest_track_row.get("wind_radii_50_sw"),
+            "wind_radii_50_nw": nearest_track_row.get("wind_radii_50_nw"),
+            "wind_radii_64_ne": nearest_track_row.get("wind_radii_64_ne"),
+            "wind_radii_64_se": nearest_track_row.get("wind_radii_64_se"),
+            "wind_radii_64_sw": nearest_track_row.get("wind_radii_64_sw"),
+            "wind_radii_64_nw": nearest_track_row.get("wind_radii_64_nw"),
+        }
+
         try:
             wind_data = calculate_max_wind_experienced(
                 centroid=centroid_geom,
                 track_line=track_line,
                 track_df=track,
                 envelope=envelope,
+                wind_radii=wind_radii,
             )
         except ValueError:
             wind_data = {
@@ -204,6 +247,9 @@ def run_pipeline(args: argparse.Namespace) -> pd.DataFrame:
                 "distance_to_envelope_edge_nm": np.nan,
                 "nearest_track_point_lat": np.nan,
                 "nearest_track_point_lon": np.nan,
+                "radius_max_wind_at_approach_nm": np.nan,
+                "inside_eyewall": np.nan,
+                "wind_source": "error",
             }
         wind_rows.append(wind_data)
 
@@ -213,6 +259,7 @@ def run_pipeline(args: argparse.Namespace) -> pd.DataFrame:
                 track_df=track,
                 wind_threshold="64kt",
                 interval_minutes=15,
+                envelope=envelope,
             )
         )
 

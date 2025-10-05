@@ -19,6 +19,8 @@ References:
     • Alpha shapes – Edelsbrunner et al., 1983, “On the Shape of a Set of Points in the Plane”.
 """
 import math
+from typing import Iterable, List
+
 import pandas as pd
 import numpy as np
 from shapely.geometry import Point, LineString, Polygon, MultiPoint
@@ -65,6 +67,142 @@ def calculate_destination_point(lat, lon, bearing, distance_nm):
     )
     
     return (math.degrees(dest_lon_rad), math.degrees(dest_lat_rad))
+
+
+def identify_imputable_segments(storm_track: pd.DataFrame, wind_threshold: str = "64kt") -> pd.Series:
+    """Return boolean mask marking rows eligible for proportional radii imputation."""
+
+    quadrants = ["ne", "se", "sw", "nw"]
+    prefix = wind_threshold.replace("kt", "")
+    radii_cols = [f"wind_radii_{prefix}_{quad}" for quad in quadrants]
+
+    mask = pd.Series(False, index=storm_track.index)
+    for position, idx in enumerate(storm_track.index):
+        current_vals = storm_track.loc[idx, radii_cols]
+        current_defined = current_vals.notna() & (current_vals > 0)
+        defined_count = int(current_defined.sum())
+
+        if defined_count == len(quadrants):
+            continue  # fully observed, no imputation required
+
+        prev_defined_count = 0
+        if position > 0:
+            prev_idx = storm_track.index[position - 1]
+            prev_vals = storm_track.loc[prev_idx, radii_cols]
+            prev_defined = prev_vals.notna() & (prev_vals > 0)
+            prev_defined_count = int(prev_defined.sum())
+
+        imputable = False
+        if defined_count >= 2:
+            imputable = True
+        elif prev_defined_count >= 2:
+            imputable = True
+
+        mask.iloc[position] = imputable
+
+    return mask
+
+
+def impute_missing_wind_radii(storm_track: pd.DataFrame, wind_threshold: str = "64kt") -> pd.DataFrame:
+    """Return copy of ``storm_track`` with proportional imputation for missing quadrants."""
+
+    if storm_track.empty:
+        return storm_track.copy()
+
+    track = storm_track.copy().reset_index(drop=True)
+
+    quadrants = ["ne", "se", "sw", "nw"]
+    prefix = wind_threshold.replace("kt", "")
+    base_cols = [f"wind_radii_{prefix}_{quad}" for quad in quadrants]
+    imputed_cols = [f"{col}_imputed" for col in base_cols]
+    flag_cols = [f"{col}_was_imputed" for col in base_cols]
+    ratio_col = f"wind_radii_{prefix}_shrinkage_ratio"
+
+    for base_col, imputed_col, flag_col in zip(base_cols, imputed_cols, flag_cols):
+        track[imputed_col] = track[base_col]
+        track[flag_col] = False
+
+    track[ratio_col] = np.nan
+    track[f"wind_radii_{prefix}_any_imputed"] = False
+
+    imputable_mask = identify_imputable_segments(track, wind_threshold=wind_threshold).reset_index(drop=True)
+
+    last_known_ratio: float | None = 1.0
+    index_list = track.index.tolist()
+
+    for position, idx in enumerate(index_list):
+        prev_idx = index_list[position - 1] if position > 0 else None
+
+        current_vals = track.loc[idx, base_cols]
+        defined_mask = current_vals.notna() & (current_vals > 0)
+        defined_count = int(defined_mask.sum())
+
+        applied_ratio: float | None = None
+
+        # Update shrinkage ratio whenever overlapping quadrants exist with previous step
+        if prev_idx is not None:
+            ratios: List[float] = []
+            for base_col, imputed_col in zip(base_cols, imputed_cols):
+                current_val = track.at[idx, base_col]
+                prev_val = track.at[prev_idx, imputed_col]
+                if (
+                    pd.notna(current_val)
+                    and pd.notna(prev_val)
+                    and float(prev_val) > 0
+                ):
+                    ratios.append(float(current_val) / float(prev_val))
+
+            if ratios:
+                applied_ratio = float(np.mean(ratios))
+                applied_ratio = max(applied_ratio, 0.0)
+                last_known_ratio = applied_ratio
+
+        # Store ratio (either newly computed or carry forward last known)
+        if applied_ratio is not None:
+            track.at[idx, ratio_col] = applied_ratio
+        elif last_known_ratio is not None:
+            track.at[idx, ratio_col] = last_known_ratio
+
+        # Determine whether we should attempt imputation at this row
+        if not imputable_mask.iloc[position]:
+            continue
+
+        if defined_count >= 2 and applied_ratio is None and last_known_ratio is not None:
+            applied_ratio = last_known_ratio
+
+        if defined_count < 2:
+            applied_ratio = applied_ratio if applied_ratio is not None else last_known_ratio
+
+        if applied_ratio is None or prev_idx is None:
+            continue  # insufficient information to impute
+
+        row_imputed = False
+        for base_col, imputed_col, flag_col in zip(base_cols, imputed_cols, flag_cols):
+            current_val = track.at[idx, base_col]
+            if pd.notna(current_val) and current_val > 0:
+                continue  # observed value already present
+
+            prev_val = track.at[prev_idx, imputed_col]
+            if pd.isna(prev_val):
+                continue
+
+            if float(prev_val) <= 0:
+                imputed_value = 0.0
+            else:
+                imputed_value = float(prev_val) * float(applied_ratio)
+                if imputed_value < 0:
+                    imputed_value = 0.0
+
+            track.at[idx, imputed_col] = imputed_value
+            track.at[idx, flag_col] = True
+            row_imputed = True
+
+        if row_imputed:
+            track.at[idx, f"wind_radii_{prefix}_any_imputed"] = True
+            if applied_ratio is not None:
+                last_known_ratio = applied_ratio
+
+    return track
 
 
 def calculate_slope(lat1, lon1, lat2, lon2):
@@ -151,22 +289,35 @@ def get_wind_extent_points(track_point, wind_threshold='34kt'):
     bearings = {'ne': 45, 'se': 135, 'sw': 225, 'nw': 315}
     extent_points = []
 
+    prefix = wind_threshold.replace("kt", "")
+
     for direction, bearing in bearings.items():
-        radius_col = f'wind_radii_{wind_threshold.replace("kt", "")}_{direction}'
-        radius = track_point.get(radius_col, 0)
+        radius_col = f"wind_radii_{prefix}_{direction}"
+        imputed_col = f"{radius_col}_imputed"
+        flag_col = f"{radius_col}_was_imputed"
+
+        radius = track_point.get(imputed_col, np.nan)
+        was_imputed = bool(track_point.get(flag_col, False))
+
+        if not pd.notna(radius) or radius <= 0:
+            radius = track_point.get(radius_col, np.nan)
+            was_imputed = False
 
         if not pd.notna(radius) or radius <= 0:
             continue
 
         dest_lon, dest_lat = calculate_destination_point(lat, lon, bearing, radius)
-        
-        extent_points.append({
-            'lat': dest_lat,
-            'lon': dest_lon,
-            'direction': direction,
-            'radius': radius,
-            'wind_threshold': wind_threshold
-        })
+
+        extent_points.append(
+            {
+                'lat': dest_lat,
+                'lon': dest_lon,
+                'direction': direction,
+                'radius': radius,
+                'wind_threshold': wind_threshold,
+                'was_imputed': was_imputed,
+            }
+        )
 
     return extent_points
 
@@ -257,12 +408,19 @@ def create_storm_envelope(storm_track, wind_threshold='64kt', alpha=0.6, verbose
     if verbose:
         print(f"Creating Segmented Alpha Shape envelope for {len(storm_track)} points...")
 
-    polygons = []
-    lines = []
-    all_hull_points = [] # To store points for visualization
-    radii_cols = [f'wind_radii_{wind_threshold.replace("kt", "")}_{d}' for d in ['ne', 'se', 'sw', 'nw']]
+    polygons: List[Polygon] = []
+    lines: List[LineString] = []
+    all_hull_points = []  # To store points for visualization
 
-    storm_track['has_radii'] = storm_track[radii_cols].gt(0).any(axis=1)
+    prefix = wind_threshold.replace("kt", "")
+    radii_cols = [f"wind_radii_{prefix}_{d}" for d in ['ne', 'se', 'sw', 'nw']]
+    imputed_cols = [f"{col}_imputed" for col in radii_cols]
+
+    working_track = impute_missing_wind_radii(storm_track, wind_threshold=wind_threshold)
+
+    working_track['has_radii_observed'] = working_track[radii_cols].gt(0).any(axis=1)
+    working_track['has_radii'] = working_track[imputed_cols].fillna(0).gt(0).any(axis=1)
+    working_track['imputation_begins'] = working_track[f"wind_radii_{prefix}_any_imputed"].fillna(False)
 
     # --- Segmentation Logic: Track split by data-availability gaps ---
     #
@@ -280,7 +438,7 @@ def create_storm_envelope(storm_track, wind_threshold='64kt', alpha=0.6, verbose
     in_gap = False
 
     # First, determine where the long gaps are to define the segments
-    for has_radii_val in storm_track['has_radii']:
+    for has_radii_val in working_track['has_radii']:
         if not has_radii_val:
             gap_counter += 1
             in_gap = True
@@ -291,9 +449,9 @@ def create_storm_envelope(storm_track, wind_threshold='64kt', alpha=0.6, verbose
             in_gap = False
         segment_ids.append(current_segment)
     
-    storm_track['segment_id'] = segment_ids
+    working_track['segment_id'] = segment_ids
 
-    for seg_id, segment_df in storm_track.groupby('segment_id'):
+    for seg_id, segment_df in working_track.groupby('segment_id'):
         # For each segment, generate one hull from all its points
         all_points_for_hull = []
         
@@ -302,7 +460,7 @@ def create_storm_envelope(storm_track, wind_threshold='64kt', alpha=0.6, verbose
         all_points_for_hull.extend(track_points_in_segment)
 
         # Add all wind extent points from the segment (where they exist)
-        for i, row in segment_df.iterrows():
+        for _, row in segment_df.iterrows():
             if row['has_radii']:
                 wind_points = get_wind_extent_points(row, wind_threshold=wind_threshold)
                 for wp in wind_points:
@@ -332,7 +490,7 @@ def create_storm_envelope(storm_track, wind_threshold='64kt', alpha=0.6, verbose
     if final_geom is None:
         return None, LineString(), [] # Return empty list
 
-    full_track_line = LineString([Point(p.lon, p.lat) for p in storm_track.itertuples()])
+    full_track_line = LineString([Point(p.lon, p.lat) for p in working_track.itertuples()])
 
     if verbose:
         print(f"✅ Alpha shape envelope created. Validity: {final_geom.is_valid}")
