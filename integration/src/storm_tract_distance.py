@@ -34,9 +34,13 @@ sys.path.extend(
 
 from parse_raw import parse_hurdat2_file
 from profile_clean import clean_hurdat2_data
-from envelope_algorithm import create_storm_envelope
+from envelope_algorithm import create_storm_envelope, impute_missing_wind_radii
 from wind_interpolation import calculate_max_wind_experienced
-from duration_calculator import calculate_duration_for_tract
+from duration_calculator import (
+    calculate_duration_for_tract,
+    interpolate_track_temporal,
+    create_instantaneous_wind_polygon,
+)
 from tract_centroids import load_tracts_with_centroids
 
 
@@ -90,6 +94,68 @@ def quadrant_for_offset(lat_diff: float, lon_diff: float) -> str:
     if lat_diff < 0 and lon_diff < 0:
         return "sw"
     return "nw"
+
+
+def create_wind_coverage_envelope(track: pd.DataFrame, wind_threshold: str = "64kt", interval_minutes: int = 15):
+    """Create envelope from union of actual wind polygons (more accurate than alpha shape).
+
+    This approach eliminates false positives by only including areas that actually
+    experience winds ≥ threshold. Uses proportional imputation to extend coverage
+    through storm weakening phases.
+
+    Args:
+        track: Storm track DataFrame with wind radii columns
+        wind_threshold: Wind threshold ('64kt', '50kt', '34kt')
+        interval_minutes: Temporal interpolation interval
+
+    Returns:
+        tuple: (wind_coverage_polygon, track_line, interpolated_track_df)
+    """
+    from shapely.ops import unary_union
+
+    # Apply imputation to extend through weakening
+    track_imputed = impute_missing_wind_radii(track, wind_threshold=wind_threshold)
+
+    # Prepare for interpolation (numeric columns only)
+    prefix = wind_threshold.replace("kt", "")
+    imputed_cols = [f"wind_radii_{prefix}_{q}_imputed" for q in ["ne", "se", "sw", "nw"]]
+
+    track_subset = track_imputed[['date', 'lat', 'lon'] + imputed_cols].copy()
+    track_subset = track_subset.rename(columns={
+        f"wind_radii_{prefix}_ne_imputed": f"wind_radii_{prefix}_ne",
+        f"wind_radii_{prefix}_se_imputed": f"wind_radii_{prefix}_se",
+        f"wind_radii_{prefix}_sw_imputed": f"wind_radii_{prefix}_sw",
+        f"wind_radii_{prefix}_nw_imputed": f"wind_radii_{prefix}_nw",
+    })
+
+    # Interpolate track temporally
+    interpolated = interpolate_track_temporal(track_subset, interval_minutes=interval_minutes)
+
+    # Create all instantaneous wind polygons (NO BUFFER for exact coverage)
+    wind_polygons = []
+    for _, row in interpolated.iterrows():
+        poly = create_instantaneous_wind_polygon(
+            lat=row['lat'],
+            lon=row['lon'],
+            wind_radii_ne=row[f'wind_radii_{prefix}_ne'],
+            wind_radii_se=row[f'wind_radii_{prefix}_se'],
+            wind_radii_sw=row[f'wind_radii_{prefix}_sw'],
+            wind_radii_nw=row[f'wind_radii_{prefix}_nw'],
+            buffer_deg=0.0,  # No buffer - exact wind radii coverage only
+        )
+        if poly and not poly.is_empty:
+            wind_polygons.append(poly)
+
+    if not wind_polygons:
+        return None, LineString(list(zip(track['lon'], track['lat']))), interpolated
+
+    # Union all polygons to create coverage envelope
+    wind_coverage = unary_union(wind_polygons)
+
+    # Create track line
+    track_line = LineString(list(zip(track['lon'], track['lat'])))
+
+    return wind_coverage, track_line, interpolated
 
 
 def compute_min_distance_features(
@@ -195,19 +261,26 @@ def run_pipeline(args: argparse.Namespace) -> pd.DataFrame:
     if centroids.empty:
         raise ValueError("No census tract centroids fell within the computed bounds; widen the margin")
 
-    envelope, track_line, _ = create_storm_envelope(track, wind_threshold="64kt", alpha=0.6)
-    if envelope is None:
-        raise ValueError("Failed to generate envelope for storm; cannot compute wind features")
+    # Use wind coverage envelope (union of actual wind polygons) instead of alpha shape
+    # This eliminates false positives from alpha shape approximation overshoot
+    wind_coverage, track_line, _ = create_wind_coverage_envelope(track, wind_threshold="64kt", interval_minutes=15)
+    if wind_coverage is None:
+        raise ValueError("Failed to generate wind coverage envelope for storm; cannot compute features")
 
-    centroids_in_envelope = centroids[centroids.geometry.within(envelope)].reset_index(drop=True)
-    if centroids_in_envelope.empty:
+    # Filter centroids to only those within actual wind coverage
+    centroids_in_coverage = centroids[centroids.geometry.within(wind_coverage)].reset_index(drop=True)
+    if centroids_in_coverage.empty:
         return pd.DataFrame()
 
-    base_features = compute_min_distance_features(centroids_in_envelope, track).reset_index(drop=True)
+    # Keep alpha shape for visualization/reference only
+    alpha_envelope, _, _ = create_storm_envelope(track, wind_threshold="64kt", alpha=0.6)
+    envelope = alpha_envelope if alpha_envelope else wind_coverage
+
+    base_features = compute_min_distance_features(centroids_in_coverage, track).reset_index(drop=True)
 
     wind_rows = []
     duration_rows = []
-    for idx, centroid_geom in enumerate(centroids_in_envelope.geometry):
+    for idx, centroid_geom in enumerate(centroids_in_coverage.geometry):
         # Extract wind radii from the nearest track point for this centroid
         nearest_point = track_line.interpolate(track_line.project(centroid_geom))
         track_distances = track.apply(
@@ -267,6 +340,11 @@ def run_pipeline(args: argparse.Namespace) -> pd.DataFrame:
     duration_df = pd.DataFrame(duration_rows)
 
     combined = pd.concat([base_features, wind_df, duration_df], axis=1)
+
+    # Filter out false positives: tracts with negligible exposure (<0.25 hours)
+    # These can occur from wind coverage union bridging between non-overlapping polygons
+    combined = combined[combined['duration_in_envelope_hours'] >= 0.25].reset_index(drop=True)
+
     return combined
 
 
