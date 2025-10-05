@@ -280,12 +280,17 @@ def create_qaqc_map(storm_id: str = 'AL092021', interval_minutes: int = 15) -> f
             tooltip='Hurricane Track Centerline'
         ).add_to(m)
 
-    # Load tract features to show duration values
+    # Load tract features to show duration values (from wind coverage envelope)
     print("Loading tract features...")
-    features_path = REPO_ROOT / "integration/outputs/ida_features_complete_v2.csv"
+    features_path = REPO_ROOT / "integration/outputs/ida_features_final.csv"
+    if not features_path.exists():
+        # Fallback to older version if final doesn't exist
+        features_path = REPO_ROOT / "integration/outputs/ida_features_complete_v2.csv"
+
     if features_path.exists():
         features = pd.read_csv(features_path)
         features['tract_geoid'] = features['tract_geoid'].astype(str)
+        print(f"Loaded {len(features)} tract features from {features_path.name}")
 
         # Create layer for tract centroids
         tracts_layer = folium.FeatureGroup(name='Tract Centroids (Duration QA/QC)', show=True)

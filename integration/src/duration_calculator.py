@@ -244,6 +244,7 @@ def calculate_duration_for_tract(
     Returns:
         Dictionary with duration metrics
     """
+    from envelope_algorithm import impute_missing_wind_radii
 
     columns_required = {
         "date",
@@ -258,14 +259,18 @@ def calculate_duration_for_tract(
     if missing:
         raise ValueError(f"track_df missing columns: {missing}")
 
+    # Apply proportional imputation to extend through storm weakening
+    track_imputed = impute_missing_wind_radii(track_df, wind_threshold=wind_threshold)
+
+    prefix = wind_threshold.replace("kt", "")
     rename_map = {
-        f"wind_radii_{wind_threshold.replace('kt', '')}_ne": "wind_radii_64_ne",
-        f"wind_radii_{wind_threshold.replace('kt', '')}_se": "wind_radii_64_se",
-        f"wind_radii_{wind_threshold.replace('kt', '')}_sw": "wind_radii_64_sw",
-        f"wind_radii_{wind_threshold.replace('kt', '')}_nw": "wind_radii_64_nw",
+        f"wind_radii_{prefix}_ne_imputed": "wind_radii_64_ne",
+        f"wind_radii_{prefix}_se_imputed": "wind_radii_64_se",
+        f"wind_radii_{prefix}_sw_imputed": "wind_radii_64_sw",
+        f"wind_radii_{prefix}_nw_imputed": "wind_radii_64_nw",
     }
 
-    track_subset = track_df[["date", "lat", "lon", *rename_map.keys()]].rename(columns=rename_map)
+    track_subset = track_imputed[["date", "lat", "lon", *rename_map.keys()]].rename(columns=rename_map)
 
     interpolated = interpolate_track_temporal(track_subset, interval_minutes=interval_minutes)
     exposure = check_centroid_exposure_over_time(centroid, interpolated)
