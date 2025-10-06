@@ -1,46 +1,70 @@
 # Dashboard Deployment Plan
 
 ## Context
-Streamlit dashboard exists and runs successfully but requires feature CSV files to display storm data. Feature pipeline exists but has a bug preventing feature extraction.
+Streamlit dashboard exists and runs successfully but requires feature CSV files to display storm data. Feature pipeline has been refactored to delegate to the modern `storm_tract_distance` pipeline.
 
-## Workflow
+## Status: Phase 1 Complete ✅
 
-### 1. Fix Feature Pipeline Bug
-- Locate TractData intersects error in `feature_pipeline.py:68`
-- Verify `load_tracts_with_centroids()` returns GeoDataFrame not TractData object
-- Ensure spatial join uses proper GeoPandas method
-- Test with single storm (Ida) before batch processing
+### 1. Fix Feature Pipeline Bug ✅ COMPLETE
+- ✅ Replaced hand-rolled extractor with wrapper around `storm_tract_distance.run_pipeline`
+- ✅ Fixed by delegating to modern pipeline instead of manual spatial join
+- ✅ Added CLI interface with argparse
+- ✅ Default output path: `integration/outputs/{storm_id}_features_complete.csv`
 
-### 2. Generate Feature CSV for Ida
-- Run corrected pipeline for AL092021
-- Validate output schema matches dashboard expectations
-- Verify required columns: `tract_geoid`, `centroid_lat`, `centroid_lon`, `distance_km`, `storm_id`, `storm_name`
-- Confirm optional columns present: `duration_in_envelope_hours`, `max_wind_experienced_kt`
-- Save to `integration/outputs/ida_features_complete.csv`
+### 2. Generate Feature CSV for Ida ✅ COMPLETE
+- ✅ Successfully generated via: `python integration/src/feature_pipeline.py AL092021`
+- ✅ Output: 563 rows × 37 columns (229 KB)
+- ✅ Validated schema includes all required columns
+- ✅ Duration statistics look reasonable (mean: 4.2 hrs, range: 0.25-8 hrs)
+- ✅ Includes intensification features (lead time, max intensification rate, etc.)
 
-### 3. Test Dashboard with Single Storm
-- Verify dashboard detects new features file
-- Confirm storm appears in selector dropdown
-- Test all dashboard features: map, filters, charts, data table
-- Check for rendering errors or missing data
+### 3. Test Dashboard with Single Storm ⏳ READY TO TEST
+- ✅ Dashboard running at http://localhost:8501
+- ✅ Streamlit dependencies installed
+- ⏸️ Manual browser testing needed to confirm:
+  - Storm appears in selector dropdown
+  - Map renders with envelope and track
+  - Filters work correctly
+  - Charts display duration/distance/wind distributions
+  - Data table shows all 563 tracts
 
-### 4. Generate Features for All 14 Storms
-- Create batch processing script if not exists
-- Process storms sequentially with error handling
-- Generate `*_features_complete.csv` for each storm
-- Validate each output before proceeding
+### 4. Generate Features for All 14 Storms ⏳ READY TO RUN
+- ✅ Batch script exists: `integration/scripts/batch_extract_features.py`
+- ✅ Script updated to save per-storm CSVs alongside master rollup
+- ✅ Reads storm list from `hurdat2/outputs/batch_processing_summary.csv`
+- ⏸️ **Action needed:** Run batch processor
+  ```bash
+  python integration/scripts/batch_extract_features.py
+  ```
+- Expected output:
+  - Individual files: `integration/outputs/{storm_id}_features_complete.csv` (14 files)
+  - Master rollup: `integration/outputs/storm_tract_features.csv`
+  - Console summary with tract counts per storm
 
-### 5. Final Dashboard Validation
-- Confirm all 14 storms load correctly
+### 5. Final Dashboard Validation ⏸️ PENDING BATCH RUN
+- Open http://localhost:8501 in browser
+- Confirm all 14 storms appear in dropdown
 - Test switching between storms
 - Verify filtering controls work across all datasets
-- Check performance with largest datasets
+- Check performance with largest datasets (Harvey, Irma likely largest)
+- Validate chart rendering for all storms
 
-### 6. Documentation
-- Update README_streamlit.md with prerequisites
-- Document feature CSV schema requirements
-- Add troubleshooting section for common issues
-- Include example commands for feature generation
+### 6. Documentation ⏸️ TODO
+- Update README_streamlit.md:
+  - Add CLI usage examples for feature generation
+  - Document 37-column schema
+  - Add troubleshooting for missing features files
+- Add example workflow:
+  ```bash
+  # Single storm
+  python integration/src/feature_pipeline.py AL092021
+
+  # All 14 storms
+  python integration/scripts/batch_extract_features.py
+
+  # Launch dashboard
+  streamlit run integration/src/streamlit_app.py
+  ```
 
 ## File Organization
 
@@ -91,10 +115,32 @@ integration/outputs/
 - Process completes in under 30 minutes total
 
 ## Deployment Steps
-1. Fix pipeline bug (15 min)
-2. Test with Ida (10 min)
-3. Batch process all storms (20 min)
-4. Final validation (10 min)
-5. Update documentation (10 min)
 
-**Total: ~65 minutes**
+### Completed ✅
+1. ✅ Fix pipeline bug (15 min) - Refactored to use modern pipeline
+2. ✅ Test with Ida (10 min) - Generated 563-tract CSV successfully
+3. ✅ Install Streamlit dependencies - Dashboard running
+
+### Remaining ⏸️
+4. **Test dashboard with Ida** (5 min)
+   - Open http://localhost:8501 in browser
+   - Verify Ida loads and all features work
+
+5. **Batch process remaining 13 storms** (20-30 min)
+   ```bash
+   python integration/scripts/batch_extract_features.py
+   ```
+
+6. **Final validation** (10 min)
+   - Test all 14 storms in dashboard
+   - Verify chart performance
+   - Check edge cases
+
+7. **Update documentation** (10 min)
+   - Add CLI usage to README_streamlit.md
+   - Document schema
+   - Add troubleshooting guide
+
+**Completed: ~25 minutes**
+**Remaining: ~45-55 minutes**
+**Total: ~70-80 minutes**

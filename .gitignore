@@ -60,3 +60,6 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Legacy folders (archived during 2025-10-05 restructure)
+_legacy_data_sources/
