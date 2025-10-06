@@ -48,6 +48,17 @@ def main():
         try:
             # Extract features for this storm
             storm_features = extract_all_features_for_storm(storm_id)
+            if storm_features.empty:
+                print(f"⚠️ No tracts found for {storm_name}; skipping")
+                continue
+
+            # Persist per-storm features for dashboard usage
+            per_storm_path = (
+                REPO_ROOT / "integration" / "outputs" / f"{storm_id.lower()}_features_complete.csv"
+            )
+            per_storm_path.parent.mkdir(parents=True, exist_ok=True)
+            storm_features.to_csv(per_storm_path, index=False)
+
             all_features.append(storm_features)
 
             print(f"✅ Extracted {len(storm_features)} tract features")
