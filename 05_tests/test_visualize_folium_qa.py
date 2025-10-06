@@ -11,7 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "01_data_sources" / "hurdat2" / "src"))
 
 from visualize_folium_qa import (
-    create_wind_quadrilateral,
+    create_wind_arc_polygon,
     generate_qa_map,
 )
 
@@ -45,18 +45,18 @@ def _sample_track() -> pd.DataFrame:
     )
 
 
-def test_create_wind_quadrilateral_returns_vertices():
+def test_create_wind_arc_polygon_returns_vertices():
     radii = {"ne": 20.0, "se": 20.0, "sw": 20.0, "nw": 20.0}
-    vertices = create_wind_quadrilateral(29.0, -90.0, radii)
+    vertices = create_wind_arc_polygon(29.0, -90.0, radii)
 
     assert vertices is not None
-    assert len(vertices) == 4
+    assert len(vertices) > 4  # Arc-based polygons have many more vertices than quadrilaterals
     assert all(isinstance(lat, (int, float)) and isinstance(lon, (int, float)) for lat, lon in vertices)
 
 
-def test_create_wind_quadrilateral_handles_missing_values():
+def test_create_wind_arc_polygon_handles_missing_values():
     radii = {"ne": 30.0, "se": None, "sw": 30.0, "nw": 30.0}
-    assert create_wind_quadrilateral(29.0, -90.0, radii) is None
+    assert create_wind_arc_polygon(29.0, -90.0, radii) is None
 
 
 def test_generate_qa_map_writes_html(tmp_path):

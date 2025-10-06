@@ -36,7 +36,7 @@ def parse_hurdat2_file(file_path):
             if len(parts) >= 3 and len(parts) <= 4 and parts[0].startswith('AL') and parts[2].isdigit():
                 current_storm_id = parts[0].strip()
                 current_storm_name = parts[1].strip() if parts[1].strip() else 'UNNAMED'
-                print(f"Found storm: {current_storm_id} - {current_storm_name}")
+                # print(f"Found storm: {current_storm_id} - {current_storm_name}")  # Commented out for performance
                 continue
 
             # This is a data line (track point)

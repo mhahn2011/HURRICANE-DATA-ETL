@@ -31,3 +31,16 @@ HURDAT2 (Hurricane Database 2) provides best-track data for Atlantic and Pacific
 from data_sources.hurdat2.src.parse_raw import load_hurdat2
 df = load_hurdat2('data_sources/hurdat2/raw/hurdat2-atlantic.txt')
 ```
+
+## Streamlit Wind Field Viewer
+
+An interactive viewer lives at `src/streamlit_wind_field_app.py`. It renders
+arc-based wind-field polygons for a curated set of 14 Gulf Coast hurricanes.
+
+```bash
+streamlit run 01_data_sources/hurdat2/src/streamlit_wind_field_app.py
+```
+
+Configuration for the curated storm list resides in
+`00_config/target_hurricanes.json`. Update that file if you need to adjust the
+dashboard’s scope (all storm IDs must exist in HURDAT2).

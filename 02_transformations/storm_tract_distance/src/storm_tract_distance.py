@@ -35,6 +35,12 @@ sys.path.extend(
     ]
 )
 
+try:
+    from parse_raw_indexed import parse_storm_by_id, get_or_build_index
+    USE_INDEXED_PARSER = True
+except ImportError:
+    USE_INDEXED_PARSER = False
+
 from parse_raw import parse_hurdat2_file
 from profile_clean import clean_hurdat2_data
 from envelope_algorithm import create_storm_envelope, impute_missing_wind_radii
@@ -247,9 +253,16 @@ def compute_min_distance_features(
 def run_pipeline(args: argparse.Namespace) -> pd.DataFrame:
     data_root = Path(args.hurdat_path).resolve()
 
-    df_raw = parse_hurdat2_file(str(data_root))
-    df_clean = clean_hurdat2_data(df_raw)
-    track = build_storm_track(df_clean, args.storm_id)
+    # Use indexed parser if available (100-1000x faster)
+    if USE_INDEXED_PARSER:
+        index = get_or_build_index(str(data_root))
+        df_raw = parse_storm_by_id(str(data_root), args.storm_id, index=index)
+        df_clean = clean_hurdat2_data(df_raw)
+        track = df_clean.sort_values('date').reset_index(drop=True)
+    else:
+        df_raw = parse_hurdat2_file(str(data_root))
+        df_clean = clean_hurdat2_data(df_raw)
+        track = build_storm_track(df_clean, args.storm_id)
 
     bounds = track_bounds(track, margin_deg=args.bounds_margin)
 

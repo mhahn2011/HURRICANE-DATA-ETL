@@ -1,0 +1,18 @@
+{
+  "target_hurricanes": [
+    {"storm_id": "AL122005", "name": "KATRINA", "year": 2005},
+    {"storm_id": "AL182005", "name": "RITA", "year": 2005},
+    {"storm_id": "AL252005", "name": "WILMA", "year": 2005},
+    {"storm_id": "AL072008", "name": "GUSTAV", "year": 2008},
+    {"storm_id": "AL092008", "name": "IKE", "year": 2008},
+    {"storm_id": "AL092011", "name": "IRENE", "year": 2011},
+    {"storm_id": "AL092012", "name": "ISAAC", "year": 2012},
+    {"storm_id": "AL182012", "name": "SANDY", "year": 2012},
+    {"storm_id": "AL092017", "name": "HARVEY", "year": 2017},
+    {"storm_id": "AL112017", "name": "IRMA", "year": 2017},
+    {"storm_id": "AL152017", "name": "MARIA", "year": 2017},
+    {"storm_id": "AL142018", "name": "MICHAEL", "year": 2018},
+    {"storm_id": "AL132020", "name": "LAURA", "year": 2020},
+    {"storm_id": "AL092021", "name": "IDA", "year": 2021}
+  ]
+}

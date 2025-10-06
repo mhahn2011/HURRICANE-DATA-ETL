@@ -19,6 +19,12 @@ sys.path.extend([
     str(REPO_ROOT / "03_integration" / "src"),
 ])
 
+try:
+    from parse_raw_indexed import parse_storm_by_id, get_or_build_index
+    USE_INDEXED_PARSER = True
+except ImportError:
+    USE_INDEXED_PARSER = False
+
 from parse_raw import parse_hurdat2_file
 from profile_clean import clean_hurdat2_data
 from intensification_features import calculate_intensification_features
@@ -73,11 +79,18 @@ def extract_all_features_for_storm(
         return features
 
     # Append intensification features (constant per storm) for completeness.
-    df_raw = parse_hurdat2_file(hurdat_data_path)
-    df_clean = clean_hurdat2_data(df_raw)
-    track_df = df_clean[df_clean['storm_id'] == storm_id].sort_values('date').reset_index(drop=True)
-    if track_df.empty:
-        raise ValueError(f"Storm {storm_id} not found in cleaned dataset")
+    # Use indexed parser if available for speed
+    if USE_INDEXED_PARSER:
+        index = get_or_build_index(hurdat_data_path)
+        df_raw = parse_storm_by_id(hurdat_data_path, storm_id, index=index)
+        df_clean = clean_hurdat2_data(df_raw)
+        track_df = df_clean.sort_values('date').reset_index(drop=True)
+    else:
+        df_raw = parse_hurdat2_file(hurdat_data_path)
+        df_clean = clean_hurdat2_data(df_raw)
+        track_df = df_clean[df_clean['storm_id'] == storm_id].sort_values('date').reset_index(drop=True)
+        if track_df.empty:
+            raise ValueError(f"Storm {storm_id} not found in cleaned dataset")
 
     intensification = calculate_intensification_features(track_df)
     for key, value in intensification.items():
