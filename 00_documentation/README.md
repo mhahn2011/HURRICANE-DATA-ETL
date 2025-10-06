@@ -91,6 +91,7 @@ hurricane-data-etl/
 ├── 03_integration/         # Final assembly & validation
 ├── 04_src_shared/          # Shared utilities
 ├── 05_tests/               # Test suite (48/51 passing)
+├── 06_outputs/             # All outputs (ML datasets & visualizations)
 └── 00_documentation/       # This folder
 ```
 
@@ -138,6 +139,8 @@ python 02_transformations/storm_tract_distance/src/storm_tract_distance.py \
 ```bash
 python 01_data_sources/hurdat2/src/visualize_folium_qa.py \
   --storm-id AL092021
+
+# Output saved to: 06_outputs/visuals/hurdat2/IDA_2021_wind_field.html
 ```
 
 ---

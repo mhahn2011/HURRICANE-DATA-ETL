@@ -135,14 +135,14 @@ def _parse_cli_args() -> argparse.Namespace:
         "--output",
         type=Path,
         default=None,
-        help="Where to write the feature CSV (defaults to integration/outputs/{storm_id}_features_complete.csv)",
+        help="Where to write the feature CSV (defaults to 06_outputs/ml_ready/{storm_id}_features.csv)",
     )
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_cli_args()
-    default_output = REPO_ROOT / "integration" / "outputs" / f"{args.storm_id.lower()}_features_complete.csv"
+    default_output = REPO_ROOT / "06_outputs" / "ml_ready" / f"{args.storm_id.lower()}_features.csv"
     output_path = args.output or default_output
 
     saved_path = save_features_for_storm(

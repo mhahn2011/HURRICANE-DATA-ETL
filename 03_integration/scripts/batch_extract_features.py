@@ -29,7 +29,7 @@ def main():
     2. For each storm:
         a. Extract all features using feature_pipeline.py
         b. Append to master DataFrame
-    3. Save unified output: integration/outputs/storm_tract_features.csv
+    3. Save unified output: 06_outputs/ml_ready/storm_tract_features.csv
     4. Generate summary statistics
     """
     # Load storm list
@@ -56,7 +56,7 @@ def main():
 
             # Persist per-storm features for dashboard usage
             per_storm_path = (
-                REPO_ROOT / "03_integration" / "outputs" / f"{storm_id.lower()}_features_complete.csv"
+                REPO_ROOT / "06_outputs" / "ml_ready" / f"{storm_id.lower()}_features.csv"
             )
             per_storm_path.parent.mkdir(parents=True, exist_ok=True)
             storm_features.to_csv(per_storm_path, index=False)
@@ -73,7 +73,7 @@ def main():
     final_df = pd.concat(all_features, ignore_index=True)
 
     # Save unified output
-    output_path = REPO_ROOT / "03_integration" / "outputs" / "storm_tract_features.csv"
+    output_path = REPO_ROOT / "06_outputs" / "ml_ready" / "storm_tract_features.csv"
     output_path.parent.mkdir(exist_ok=True, parents=True)
     final_df.to_csv(output_path, index=False)
 

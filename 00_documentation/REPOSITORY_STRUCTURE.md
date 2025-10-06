@@ -97,6 +97,21 @@ hurricane-data-etl/
 │   ├── test_wind_interpolation.py
 │   └── ...                             # 13 test files total
 │
+├── 06_outputs/                         # Consolidated outputs
+│   ├── ml_ready/                       # Final ML-ready feature tables
+│   │   ├── {storm_id}_features.csv    # Per-storm features
+│   │   └── storm_tract_features.csv   # Unified dataset (all storms)
+│   │
+│   └── visuals/                        # All visualizations
+│       ├── hurdat2/                    # Single-source HURDAT2 visuals
+│       │   └── {storm_name}_{year}_wind_field.html
+│       ├── hurdat2_census/             # Multi-source transformation visuals
+│       │   ├── qaqc_*_distance.html
+│       │   ├── qaqc_*_wind.html
+│       │   ├── qaqc_*_duration.html
+│       │   └── qaqc_*_lead_time_*.html
+│       └── debug/                      # Debug/development plots
+│
 ├── _legacy_data_sources/               # Archived pre-refactor code
 │   └── README.md                       # ⚠️ DO NOT USE - historical reference only
 │
@@ -128,6 +143,7 @@ hurricane-data-etl/
    - `3x` = Assembly layer
    - `4x` = Utilities
    - `5x` = Testing
+   - `6x` = Outputs
 
 3. **Easy Navigation:** File explorers and IDEs sort predictably
 
@@ -337,5 +353,11 @@ Each follows the pattern: single-source folders process independently, transform
 - Implementation plans → `-01_plans/`
 - Test a feature → `05_tests/test_{feature}.py`
 - Run main pipeline → `python 03_integration/src/feature_pipeline.py --storm-id AL092021`
+
+**Find outputs?**
+- ML-ready datasets → `06_outputs/ml_ready/`
+- Visualizations → `06_outputs/visuals/`
+- Wind field maps → `06_outputs/visuals/hurdat2/`
+- QAQC maps → `06_outputs/visuals/hurdat2_census/`
 
 **Questions?** Check the `00_documentation/` folder first!

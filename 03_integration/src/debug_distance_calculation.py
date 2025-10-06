@@ -83,7 +83,7 @@ def main():
     ax.set_xlim(centroid_lon - 1, centroid_lon + 1)
     ax.set_ylim(centroid_lat - 1, centroid_lat + 1)
 
-    output_path = REPO_ROOT / "integration" / "outputs" / "debug_distance_plot.png"
+    output_path = REPO_ROOT / "06_outputs" / "visuals" / "debug" / "debug_distance_plot.png"
     plt.savefig(output_path, dpi=300)
     print(f"✅ Diagnostic plot saved to {output_path}")
 

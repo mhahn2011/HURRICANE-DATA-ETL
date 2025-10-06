@@ -350,7 +350,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output",
-        help="Output HTML path (default: hurdat2/outputs/qa_maps/<storm>_wind_field.html)",
+        help="Output HTML path (default: 06_outputs/visuals/hurdat2/<storm>_wind_field.html)",
     )
     return parser.parse_args()
 
@@ -370,7 +370,7 @@ def main() -> None:
         representative_year = int(pd.Timestamp(track["date"].iloc[0]).year)
         safe_name = storm_name.upper().replace(" ", "_")
         default_name = f"{safe_name}_{representative_year}_wind_field.html"
-        output_path = Path("01_data_sources/hurdat2/visuals/html") / default_name
+        output_path = Path("06_outputs/visuals/hurdat2") / default_name
 
     generate_qa_map(track, storm_name, args.storm_id, output_path)
     print(f"✅ Generated QA map for {storm_name} ({args.storm_id}) at {output_path}")
