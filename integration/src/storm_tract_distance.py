@@ -41,6 +41,7 @@ from duration_calculator import (
     interpolate_track_temporal,
     create_instantaneous_wind_polygon,
 )
+from lead_time_calculator import calculate_lead_times
 from tract_centroids import load_tracts_with_centroids
 
 
@@ -280,6 +281,7 @@ def run_pipeline(args: argparse.Namespace) -> pd.DataFrame:
 
     wind_rows = []
     duration_rows = []
+    lead_time_rows = []
     for idx, centroid_geom in enumerate(centroids_in_coverage.geometry):
         # Extract wind radii from the nearest track point for this centroid
         nearest_point = track_line.interpolate(track_line.project(centroid_geom))
@@ -333,13 +335,23 @@ def run_pipeline(args: argparse.Namespace) -> pd.DataFrame:
                 wind_threshold="64kt",
                 interval_minutes=15,
                 envelope=envelope,
+                coverage=wind_coverage,
             )
         )
 
+        # Calculate lead time features
+        nearest_approach_time = base_features.loc[idx, 'storm_time']
+        lead_time_data = calculate_lead_times(
+            track_df=track,
+            nearest_approach_time=nearest_approach_time
+        )
+        lead_time_rows.append(lead_time_data)
+
     wind_df = pd.DataFrame(wind_rows)
     duration_df = pd.DataFrame(duration_rows)
+    lead_time_df = pd.DataFrame(lead_time_rows)
 
-    combined = pd.concat([base_features, wind_df, duration_df], axis=1)
+    combined = pd.concat([base_features, wind_df, duration_df, lead_time_df], axis=1)
 
     # Filter out false positives: tracts with negligible exposure (<0.25 hours)
     # These can occur from wind coverage union bridging between non-overlapping polygons

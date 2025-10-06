@@ -227,15 +227,15 @@ Building polygons at each timestep rather than interpolating distance-to-track l
 
 ---
 
-## Feature 5: Lead Time to Category Thresholds (Planned)
+## Feature 5: Lead Time to Category Thresholds
 
 ### The Problem
 
 Emergency managers need to know how much advance warning a community received before experiencing maximum winds. A tract that had 24 hours from when the storm became a hurricane to when it experienced peak winds has very different preparedness capacity than one with only 6 hours. However, not all storms reach high categories (many Gulf storms make landfall as Category 1-2), so lead time to "Category 4" would be undefined for most events.
 
-### The Transformation: Multi-Threshold Lead Time Calculation (Design)
+### The Transformation: Multi-Threshold Lead Time Calculation
 
-The planned implementation calculates five separate lead time features, one for each Saffir-Simpson category:
+The implementation calculates five separate lead time features, one for each Saffir-Simpson category:
 
 **Stage 1: Threshold Crossing Detection**
 For each intensity threshold (Cat 1 = 64kt, Cat 2 = 83kt, Cat 3 = 96kt, Cat 4 = 113kt, Cat 5 = 137kt), the algorithm scans the chronologically sorted track to find the first timestamp where `max_wind` meets or exceeds that threshold. This is the "threshold crossing time."

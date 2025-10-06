@@ -165,6 +165,7 @@ def calculate_duration_features(exposure_timeline: pd.DataFrame, interval_minute
         "exposure_window_hours": 0.0,
         "continuous_exposure": False,
         "interpolated_points_count": len(exposure_timeline),
+        "duration_source": "timeline",
     }
 
     if not in_mask.any():
@@ -231,6 +232,7 @@ def calculate_duration_for_tract(
     wind_threshold: str = "64kt",
     interval_minutes: int = 15,
     envelope=None,
+    coverage=None,
 ) -> Dict[str, object]:
     """Main entry point for duration exposure features.
 
@@ -239,7 +241,9 @@ def calculate_duration_for_tract(
         track_df: Hurricane track data
         wind_threshold: Wind speed threshold (default "64kt")
         interval_minutes: Temporal interpolation interval (default 15)
-        envelope: Optional alpha-shape envelope for edge interpolation
+        envelope: Optional alpha-shape envelope for edge interpolation fallback
+        coverage: Optional exact wind-coverage union polygon. When provided this
+            is used to validate whether interpolation is appropriate.
 
     Returns:
         Dictionary with duration metrics
@@ -276,17 +280,33 @@ def calculate_duration_for_tract(
     exposure = check_centroid_exposure_over_time(centroid, interpolated)
     duration = calculate_duration_features(exposure, interval_minutes=interval_minutes)
 
-    # Check if duration is zero and tract is within envelope - potential edge case
-    if duration["duration_in_envelope_hours"] == 0.0 and envelope is not None:
-        if envelope.contains(centroid):
-            # Tract is in envelope but has 0 duration - likely edge effect
-            # Apply edge interpolation
-            duration = _interpolate_duration_near_edge(
-                centroid=centroid,
-                interpolated_track=interpolated,
-                envelope=envelope,
-                interval_minutes=interval_minutes,
-            )
+    # Determine which polygon (if any) can justify an interpolation fallback.
+    candidate_polygon = None
+    if coverage is not None:
+        try:
+            if coverage.contains(centroid):  # type: ignore[attr-defined]
+                candidate_polygon = coverage
+        except AttributeError:
+            candidate_polygon = None
+
+    if candidate_polygon is None and coverage is None and envelope is not None:
+        try:
+            if envelope.contains(centroid):
+                candidate_polygon = envelope
+        except AttributeError:
+            candidate_polygon = None
+
+    # Apply edge interpolation only when a candidate polygon confirms exposure.
+    if (
+        duration["duration_in_envelope_hours"] == 0.0
+        and candidate_polygon is not None
+    ):
+        duration = _interpolate_duration_near_edge(
+            centroid=centroid,
+            interpolated_track=interpolated,
+            envelope=candidate_polygon,
+            interval_minutes=interval_minutes,
+        )
 
     return duration
 
@@ -327,6 +347,7 @@ def _interpolate_duration_near_edge(
             "exposure_window_hours": 0.0,
             "continuous_exposure": False,
             "interpolated_points_count": len(interpolated_track),
+            "duration_source": "edge_interpolation_failed",
         }
 
     # Calculate distance from centroid to envelope edge
@@ -362,4 +383,5 @@ def _interpolate_duration_near_edge(
         "exposure_window_hours": float(max_duration_hours),
         "continuous_exposure": False,
         "interpolated_points_count": len(interpolated_track),
+        "duration_source": "edge_interpolation",
     }
