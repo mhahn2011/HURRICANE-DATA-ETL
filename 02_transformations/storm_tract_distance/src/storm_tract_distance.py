@@ -368,7 +368,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--storm-id", required=True, help="Storm ID, e.g., AL092021")
     parser.add_argument(
         "--hurdat-path",
-        default="hurdat2/input_data/hurdat2-atlantic.txt",
+        default="01_data_sources/hurdat2/raw/hurdat2-atlantic.txt",
         help="Path to raw HURDAT2 text file",
     )
     parser.add_argument("--census-year", type=int, default=2019, help="TIGER/Line tract vintage")

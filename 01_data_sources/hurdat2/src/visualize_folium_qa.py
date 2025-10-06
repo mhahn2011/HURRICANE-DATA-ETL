@@ -10,19 +10,28 @@ import folium
 import pandas as pd
 
 try:  # Support both package imports (tests) and direct script execution
-    from .envelope_algorithm import calculate_destination_point
     from .parse_raw import parse_hurdat2_file
     from .profile_clean import clean_hurdat2_data
 except ImportError:  # pragma: no cover - fallback for CLI usage
     import sys
 
     MODULE_ROOT = Path(__file__).resolve().parent
+    REPO_ROOT = MODULE_ROOT.parents[3]  # Go up to repo root
+
     if str(MODULE_ROOT) not in sys.path:
         sys.path.append(str(MODULE_ROOT))
+    if str(REPO_ROOT / "04_src_shared") not in sys.path:
+        sys.path.append(str(REPO_ROOT / "04_src_shared"))
 
-    from envelope_algorithm import calculate_destination_point
     from parse_raw import parse_hurdat2_file
     from profile_clean import clean_hurdat2_data
+
+# Import shared geometry utilities
+import sys
+from pathlib import Path
+REPO_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO_ROOT / "04_src_shared"))
+from geometry_utils import calculate_destination_point
 
 
 QUADRANT_BEARINGS: Dict[str, float] = {"ne": 45.0, "se": 135.0, "sw": 225.0, "nw": 315.0}
@@ -245,7 +254,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--storm-id", required=True, help="Storm identifier (e.g., AL092021)")
     parser.add_argument(
         "--hurdat-path",
-        default="hurdat2/input_data/hurdat2-atlantic.txt",
+        default="01_data_sources/hurdat2/raw/hurdat2-atlantic.txt",
         help="Path to raw HURDAT2 file",
     )
     parser.add_argument(
@@ -270,7 +279,7 @@ def main() -> None:
         representative_year = int(pd.Timestamp(track["date"].iloc[0]).year)
         safe_name = storm_name.upper().replace(" ", "_")
         default_name = f"{safe_name}_{representative_year}_wind_field.html"
-        output_path = Path("hurdat2/outputs/qa_maps") / default_name
+        output_path = Path("01_data_sources/hurdat2/visuals/html") / default_name
 
     generate_qa_map(track, storm_name, args.storm_id, output_path)
     print(f"✅ Generated QA map for {storm_name} ({args.storm_id}) at {output_path}")

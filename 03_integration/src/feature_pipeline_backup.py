@@ -27,7 +27,7 @@ from intensification_features import calculate_intensification_features, calcula
 
 def extract_all_features_for_storm(
     storm_id: str,
-    hurdat_data_path: str = "hurdat2/input_data/hurdat2-atlantic.txt",
+    hurdat_data_path: str = "01_data_sources/hurdat2/raw/hurdat2-atlantic.txt",
     census_year: int = 2019,
     gulf_states: list = ['22', '28', '48', '01', '12'],
     alpha: float = 0.6,
