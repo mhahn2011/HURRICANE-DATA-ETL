@@ -143,7 +143,7 @@ class TestWindCoverageEnvelope:
 
     def test_baseline_comparison_with_ida_features(self):
         """Compare new approach with baseline Ida features."""
-        baseline_path = REPO_ROOT / "03_integration/outputs/ida_features_complete_v3.csv"
+        baseline_path = REPO_ROOT / "06_outputs/ml_ready/ida_features_complete_v3.csv"
 
         if not baseline_path.exists():
             pytest.skip("Baseline file not found - run storm_tract_distance.py first")

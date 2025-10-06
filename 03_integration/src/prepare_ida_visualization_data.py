@@ -7,8 +7,8 @@ from shapely.geometry import Point, LineString
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.extend(
     [
-        str(REPO_ROOT / "census" / "src"),
-        str(REPO_ROOT / "hurdat2" / "src"),
+        str(REPO_ROOT / "01_data_sources" / "census" / "src"),
+        str(REPO_ROOT / "01_data_sources" / "hurdat2" / "src"),
     ]
 )
 
@@ -24,7 +24,7 @@ def main():
 
     # 1. Load affected tract pairs
     print("Loading affected tract pairs...")
-    tract_pairs_path = REPO_ROOT / "hurdat2" / "outputs" / "ida_tract_pairs.csv"
+    tract_pairs_path = REPO_ROOT / "06_outputs" / "ml_ready" / "ida_tract_pairs.csv"
     if not tract_pairs_path.exists():
         print(f"❌ ERROR: {tract_pairs_path} not found. Please run the spatial join script first.")
         return

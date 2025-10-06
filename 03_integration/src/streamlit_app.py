@@ -294,7 +294,7 @@ def main() -> None:
 
     storm_options = discover_storm_files()
     if not storm_options:
-        st.error("No feature CSV files found under integration/outputs. Run the ETL pipeline first.")
+        st.error("No feature CSV files found under 06_outputs/ml_ready/. Run the ETL pipeline first.")
         return
 
     option_labels = [opt.label for opt in storm_options]

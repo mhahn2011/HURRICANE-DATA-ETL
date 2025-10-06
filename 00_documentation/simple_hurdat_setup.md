@@ -54,7 +54,7 @@ git init
 # Create multi-source directory structure
 mkdir -p {hurdat2,fema,census,integration,shared}/{input_data,src,outputs}
 mkdir -p {hurdat2,fema,census}/notebooks
-mkdir -p integration/outputs/ml_ready_data
+mkdir -p 06_outputs/ml_ready
 
 # Create core files
 touch README.md .gitignore requirements.txt
@@ -162,9 +162,9 @@ All *_tract_features.csv → ml_ready_dataset.csv
 
 ## Key Outputs
 
-- `hurdat2/outputs/storm_tract_features.csv` - Storm impact features per tract
-- `integration/outputs/ml_ready_dataset.csv` - Combined feature matrix
-- `*/outputs/eda_report.html` - Data quality reports
+- `06_outputs/ml_ready/storm_tract_features.csv` - Storm impact features per tract
+- `06_outputs/ml_ready/ml_ready_dataset.csv` - Combined feature matrix
+- `06_outputs/visuals/` - Data quality reports and visualizations
 
 ## Implementation Priority
 
@@ -243,7 +243,7 @@ This repository creates standardized feature matrices that integrate easily with
 ```python
 # In separate ML repository
 import pandas as pd
-features = pd.read_csv('hurricane-data-etl/integration/outputs/ml_ready_dataset.csv')
+features = pd.read_csv('hurricane-data-etl/06_outputs/ml_ready/ml_ready_dataset.csv')
 ```
 
 The modular structure allows independent development of each data source while maintaining consistency for final integration.

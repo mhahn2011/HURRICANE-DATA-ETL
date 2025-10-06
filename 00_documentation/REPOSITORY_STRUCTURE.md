@@ -1,11 +1,42 @@
-# Repository Structure
+# Repository Structure (Quick Reference)
 
-**Last Updated:** 2025-10-05 (Post-Refactor)
-**Previous Structure:** See `archive/REPOSITORY_STRUCTURE_pre-refactor_2025-10-05.md`
+**Status:** Superseded by comprehensive guide
+**See:** [REPOSITORY_GUIDE.md](./REPOSITORY_GUIDE.md) for full documentation
+
+**Last Updated:** 2025-10-06 (Migration Plan Created)
 
 ---
 
-## Overview
+## Quick Structure Overview
+
+This repository uses **numbered folders** for sequential ETL processing:
+
+```
+00_ = Planning & Documentation
+01_ = Data Sources (single-source only)
+02_ = Transformations (feature engineering)
+03_ = Integration (assembly, no logic)
+04_ = Shared Utilities
+05_ = Tests
+06_ = Outputs
+```
+
+**For detailed information, see [REPOSITORY_GUIDE.md](./REPOSITORY_GUIDE.md)**
+
+---
+
+## Legacy Documentation
+
+The following files have been archived to `archive/pre-migration-2025-10-06/`:
+- `REPOSITORY_ORGANIZATION_ANALYSIS.md` - Migration assessment
+- `DOCUMENTATION_REFACTORING_RECOMMENDATIONS.md` - Old refactor notes
+- `DESIGN_PHILOSOPHY_ASSESSMENT.md` - Design evaluation
+
+**Consolidated into:** [REPOSITORY_GUIDE.md](./REPOSITORY_GUIDE.md)
+
+---
+
+## Original Content Below (Maintained for Reference)
 
 This repository extracts hurricane impact features for census tract-level analysis. The structure uses **numbered folders** for logical organization and clear processing flow.
 

@@ -9,7 +9,7 @@ from shapely.geometry import Point, LineString
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.extend(
     [
-        str(REPO_ROOT / "hurdat2" / "src"),
+        str(REPO_ROOT / "01_data_sources" / "hurdat2" / "src"),
     ]
 )
 

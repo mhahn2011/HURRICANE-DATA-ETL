@@ -12,8 +12,8 @@ from shapely.geometry import Point, Polygon
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.append(str(REPO_ROOT / "hurdat2" / "src"))
+REPO_ROOT = Path(__file__).resolve().parents[3]
+sys.path.append(str(REPO_ROOT / "01_data_sources" / "hurdat2" / "src"))
 
 from envelope_algorithm import calculate_destination_point, generate_quadrant_arc_points
 

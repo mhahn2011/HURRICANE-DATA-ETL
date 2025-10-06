@@ -12,11 +12,11 @@ import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.extend([
-    str(REPO_ROOT / "hurdat2" / "src"),
-    str(REPO_ROOT / "census" / "src"),
-    str(REPO_ROOT / "hurdat2_census" / "src"),
-    str(REPO_ROOT / "_legacy_data_sources" / "hurdat2" / "src"),
-    str(REPO_ROOT / "_legacy_data_sources" / "hurdat2_census" / "src"),
+    str(REPO_ROOT / "01_data_sources" / "hurdat2" / "src"),
+    str(REPO_ROOT / "01_data_sources" / "census" / "src"),
+    str(REPO_ROOT / "02_transformations" / "storm_tract_distance" / "src"),
+    str(REPO_ROOT / "02_transformations" / "lead_time" / "src"),
+    str(REPO_ROOT / "03_integration" / "src"),
 ])
 
 from parse_raw import parse_hurdat2_file
@@ -56,7 +56,7 @@ def extract_all_features_for_storm(
     """Return tract-level features for a single hurricane storm.
 
     The function delegates to the modern pipeline implemented in
-    ``hurdat2_census/src/storm_tract_distance.py`` and attaches storm-level
+    ``02_transformations/storm_tract_distance/src/storm_tract_distance.py`` and attaches storm-level
     intensification metrics for downstream analytics.
     """
 

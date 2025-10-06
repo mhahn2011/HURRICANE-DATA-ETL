@@ -7,8 +7,8 @@ concave-hull decay model.
 
 Usage example (once TIGER/Line data is available):
 
-    python integration/src/storm_tract_distance.py --storm-id AL092021 \
-        --output integration/outputs/ida_tract_distances.csv
+    python 02_transformations/storm_tract_distance/src/storm_tract_distance.py --storm-id AL092021 \
+        --output 06_outputs/ml_ready/ida_tract_distances.csv
 """
 
 from __future__ import annotations

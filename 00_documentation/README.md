@@ -130,7 +130,7 @@ python -m pytest 05_tests/ -v
 ```bash
 python 02_transformations/storm_tract_distance/src/storm_tract_distance.py \
   --storm-id AL092021 \
-  --output 03_integration/outputs/ida_features.csv
+  --output 06_outputs/ml_ready/ida_features.csv
 ```
 
 ### Generate Visualizations
