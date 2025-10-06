@@ -291,22 +291,28 @@ def generate_qa_map(track_df: pd.DataFrame, storm_name: str, storm_id: str, outp
             Hurricane
         </p>
         <p style="margin:2px 0; padding-left:10px;">
-            <span style="background-color: purple; opacity:0.6; padding: 2px 8px; border-radius:3px;">RMW</span>
+            <span style="background-color: purple; color: white; opacity:0.9; padding: 2px 8px; border-radius:3px;">RMW</span>
             Max Wind Radius
         </p>
 
         <p style="margin-top:10px; margin-bottom:5px;"><b>Track Point Colors:</b></p>
         <p style="margin:2px 0; padding-left:10px;">
-            <span style="color:darkred;">●</span> Cat 5 (≥137 kt) &nbsp;
-            <span style="color:red;">●</span> Cat 4 (≥113 kt)
+            <span style="color:blue;">●</span> Depression
         </p>
         <p style="margin:2px 0; padding-left:10px;">
-            <span style="color:orange;">●</span> Cat 3 (≥96 kt) &nbsp;
+            <span style="color:green;">●</span> Tropical Storm
+        </p>
+        <p style="margin:2px 0; padding-left:10px;">
             <span style="color:yellow;">●</span> Cat 1-2 (≥64 kt)
         </p>
         <p style="margin:2px 0; padding-left:10px;">
-            <span style="color:green;">●</span> Tropical Storm &nbsp;
-            <span style="color:blue;">●</span> Depression
+            <span style="color:orange;">●</span> Cat 3 (≥96 kt)
+        </p>
+        <p style="margin:2px 0; padding-left:10px;">
+            <span style="color:red;">●</span> Cat 4 (≥113 kt)
+        </p>
+        <p style="margin:2px 0; padding-left:10px;">
+            <span style="color:darkred;">●</span> Cat 5 (≥137 kt)
         </p>
 
         <p style="margin-top:10px; font-size:10px; color:#666; border-top:1px solid #eee; padding-top:5px;">
@@ -317,7 +323,8 @@ def generate_qa_map(track_df: pd.DataFrame, storm_name: str, storm_id: str, outp
     '''
     folium_map.get_root().html.add_child(folium.Element(legend_html))
 
-    folium.LayerControl(collapsed=False).add_to(folium_map)
+    # Move layer control to bottom-right to avoid overlapping with legend
+    folium.LayerControl(collapsed=False, position='bottomright').add_to(folium_map)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     folium_map.save(str(output_path))
