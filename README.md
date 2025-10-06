@@ -57,6 +57,7 @@ Combines **HURDAT2 hurricane track data** with **US Census tract boundaries** to
 
 ```
 hurricane-data-etl/
+├── 00_plans/               # Implementation plans & architecture docs
 ├── 00_documentation/       # Project documentation (START HERE!)
 ├── 01_data_sources/        # HURDAT2 & Census data processing
 ├── 02_transformations/     # Feature engineering (wind, duration, lead time)
@@ -275,7 +276,7 @@ pytest 05_tests/test_your_feature.py -v
 - **Outputs Guide:** [06_outputs/README.md](06_outputs/README.md)
 - **Visualizations:** [06_outputs/visuals/README.md](06_outputs/visuals/README.md)
 - **Test Suite:** [05_tests/](05_tests/)
-- **Implementation Plans:** [-01_plans/](-01_plans/)
+- **Implementation Plans:** [00_plans/](00_plans/)
 
 ---
 

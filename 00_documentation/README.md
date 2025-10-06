@@ -65,10 +65,9 @@ python -m pytest 05_tests/test_wind_interpolation.py -v
 
 ### 📋 Implementation Plans
 
-Located in `-01_plans/`:
+Located in `00_plans/`:
 - REFACTORING_IMPLEMENTATION_PLAN.md
-- LEGACY_FOLDER_MIGRATION.md  
-- REPOSITORY_RESTRUCTURE_PLAN.md
+- IMPLEMENTATION_PLANS/ (completed and active plans)
 
 ---
 

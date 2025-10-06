@@ -11,7 +11,7 @@ This repository extracts hurricane impact features for census tract-level analys
 
 ### Design Philosophy
 
-1. **Numbered folders** - Process in logical order (plans → docs → sources → transforms → integration)
+1. **Numbered folders** - Process in logical order (00_plans → 00_docs → sources → transforms → integration)
 2. **Single-source folders** - Process one data source only (01_data_sources)
 3. **Multi-source transformations** - Combine sources to extract features (02_transformations)
 4. **Final assembly** - Integration and validation only (03_integration)
@@ -23,10 +23,12 @@ This repository extracts hurricane impact features for census tract-level analys
 ```
 hurricane-data-etl/
 │
-├── -01_plans/                          # Implementation plans & architecture docs
+├── 00_plans/                           # Implementation plans & architecture docs
 │   ├── REFACTORING_IMPLEMENTATION_PLAN.md
-│   ├── LEGACY_FOLDER_MIGRATION.md
-│   └── REPOSITORY_RESTRUCTURE_PLAN.md
+│   ├── AGENTS_GUIDE.md
+│   └── IMPLEMENTATION_PLANS/
+│       ├── COMPLETED/                  # Completed implementation plans
+│       └── MULTI_STORM_DASHBOARD.md    # Active plans
 │
 ├── 00_documentation/                   # Completed project documentation
 │   ├── README.md                       # Project overview (start here!)
@@ -128,22 +130,23 @@ hurricane-data-etl/
 ### Advantages
 
 1. **Logical Sorting:** Folders appear in processing order
-   - `-01_plans/` → Planning documents (negative prefix = meta)
+   - `00_plans/` → Planning documents
    - `00_documentation/` → Project documentation
    - `01_data_sources/` → Raw data ingestion
    - `02_transformations/` → Feature engineering
    - `03_integration/` → Final assembly
    - `04_src_shared/` → Shared utilities
    - `05_tests/` → Test suite
+   - `06_outputs/` → Final outputs
 
 2. **Clear Organization:** Number prefix signals purpose
-   - `0x` = Infrastructure/meta
-   - `1x` = Data layer
-   - `2x` = Transform layer
-   - `3x` = Assembly layer
-   - `4x` = Utilities
-   - `5x` = Testing
-   - `6x` = Outputs
+   - `00_` = Planning & documentation
+   - `01_` = Data layer
+   - `02_` = Transform layer
+   - `03_` = Assembly layer
+   - `04_` = Utilities
+   - `05_` = Testing
+   - `06_` = Outputs
 
 3. **Easy Navigation:** File explorers and IDEs sort predictably
 
@@ -350,7 +353,7 @@ Each follows the pattern: single-source folders process independently, transform
 **Find something?**
 - Algorithm documentation → `00_documentation/FEATURE_METHODOLOGY.md`
 - Project overview → `00_documentation/README.md`
-- Implementation plans → `-01_plans/`
+- Implementation plans → `00_plans/`
 - Test a feature → `05_tests/test_{feature}.py`
 - Run main pipeline → `python 03_integration/src/feature_pipeline.py --storm-id AL092021`
 
