@@ -1,0 +1,15 @@
+name,year,storm_id,status,envelope_34kt_area,envelope_50kt_area,envelope_64kt_area,track_points,max_wind,envelope_valid,output_file
+KATRINA,2005,AL122005,SUCCESS,57.73454301979168,28.562376244370782,18.302162644442117,34,150,True,/Users/Michael/hurricane-data-etl/hurdat2/outputs/batch_envelopes/katrina_2005_envelope.png
+RITA,2005,AL182005,SUCCESS,87.69469762185454,44.09765945519379,23.947346171362163,36,155,True,/Users/Michael/hurricane-data-etl/hurdat2/outputs/batch_envelopes/rita_2005_envelope.png
+DENNIS,2005,AL042005,SUCCESS,88.86790509936483,38.87982820324824,17.454191951461112,59,130,True,/Users/Michael/hurricane-data-etl/hurdat2/outputs/batch_envelopes/dennis_2005_envelope.png
+GUSTAV,2008,AL072008,SUCCESS,107.00086125145612,53.488497279128346,24.436519119008484,50,135,True,/Users/Michael/hurricane-data-etl/hurdat2/outputs/batch_envelopes/gustav_2008_envelope.png
+IKE,2008,AL092008,SUCCESS,281.65464932593324,137.66925475218733,48.406937173986535,62,125,True,/Users/Michael/hurricane-data-etl/hurdat2/outputs/batch_envelopes/ike_2008_envelope.png
+HARVEY,2017,AL092017,SUCCESS,35.0917372287062,9.089764265048077,4.235528838085005,74,115,True,/Users/Michael/hurricane-data-etl/hurdat2/outputs/batch_envelopes/harvey_2017_envelope.png
+IRMA,2017,AL112017,SUCCESS,185.41618220297988,88.51677390791785,43.419285699474706,66,155,True,/Users/Michael/hurricane-data-etl/hurdat2/outputs/batch_envelopes/irma_2017_envelope.png
+MICHAEL,2018,AL142018,SUCCESS,444.74053389512903,184.75876875657696,117.19753346421271,38,140,True,/Users/Michael/hurricane-data-etl/hurdat2/outputs/batch_envelopes/michael_2018_envelope.png
+LAURA,2020,AL132020,SUCCESS,143.62195277874977,37.54447449601882,13.77374901948393,42,130,True,/Users/Michael/hurricane-data-etl/hurdat2/outputs/batch_envelopes/laura_2020_envelope.png
+DELTA,2020,AL262020,SUCCESS,80.31411659803445,28.503147709497174,15.603124488082067,31,120,True,/Users/Michael/hurricane-data-etl/hurdat2/outputs/batch_envelopes/delta_2020_envelope.png
+ZETA,2020,AL282020,SUCCESS,136.94942684840134,29.35751611425925,7.515253219959498,25,100,True,/Users/Michael/hurricane-data-etl/hurdat2/outputs/batch_envelopes/zeta_2020_envelope.png
+SALLY,2020,AL192020,SUCCESS,24.3960994836169,7.6957241641375695,2.63918824193472,28,95,True,/Users/Michael/hurricane-data-etl/hurdat2/outputs/batch_envelopes/sally_2020_envelope.png
+IDA,2021,AL092021,SUCCESS,104.02874808136285,19.136860644657602,9.14429803647917,40,130,True,/Users/Michael/hurricane-data-etl/hurdat2/outputs/batch_envelopes/ida_2021_envelope.png
+IAN,2022,AL092022,SUCCESS,83.15254805800038,35.00509870198349,14.645089947794055,40,140,True,/Users/Michael/hurricane-data-etl/hurdat2/outputs/batch_envelopes/ian_2022_envelope.png

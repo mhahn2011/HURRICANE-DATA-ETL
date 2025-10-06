@@ -32,12 +32,13 @@ venv.bak/
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# Data files (but keep sample data)
-*.csv
-*.parquet
-*.h5
-*.hdf5
-large_data/
+# Data files (allowing outputs for collaboration)
+# Uncomment these lines if you want to exclude large data files:
+# *.csv
+# *.parquet
+# *.h5
+# *.hdf5
+# large_data/
 
 # OS
 .DS_Store
@@ -62,4 +63,5 @@ Thumbs.db
 *.temp
 
 # Legacy folders (archived during 2025-10-05 restructure)
+# Note: Legacy folders are kept locally but not pushed to avoid clutter
 _legacy_data_sources/
