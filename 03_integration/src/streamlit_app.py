@@ -18,9 +18,9 @@ from streamlit_folium import st_folium
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.extend(
     [
-        str(REPO_ROOT / "hurdat2" / "src"),
-        str(REPO_ROOT / "hurdat2_census" / "src"),
-        str(REPO_ROOT / "integration" / "src"),
+        str(REPO_ROOT / "01_data_sources" / "hurdat2" / "src"),
+        str(REPO_ROOT / "02_transformations" / "storm_tract_distance" / "src"),
+        str(REPO_ROOT / "03_integration" / "src"),
     ]
 )
 
@@ -28,8 +28,8 @@ from parse_raw import parse_hurdat2_file  # noqa: E402
 from profile_clean import clean_hurdat2_data  # noqa: E402
 from storm_tract_distance import create_wind_coverage_envelope  # noqa: E402
 
-OUTPUT_DIR = REPO_ROOT / "integration" / "outputs"
-HURDAT_PATH = REPO_ROOT / "hurdat2" / "input_data" / "hurdat2-atlantic.txt"
+OUTPUT_DIR = REPO_ROOT / "06_outputs" / "ml_ready"
+HURDAT_PATH = REPO_ROOT / "01_data_sources" / "hurdat2" / "input_data" / "hurdat2-atlantic.txt"
 
 
 @dataclass(frozen=True)

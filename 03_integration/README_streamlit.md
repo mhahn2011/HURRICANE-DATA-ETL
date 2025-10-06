@@ -15,21 +15,22 @@ produced by the integration pipeline.
    > install `streamlit`, `streamlit-folium`, and `plotly` from a trusted wheel
    > source before launching the dashboard.
 
-2. Generate storm feature CSVs under `03_integration/outputs/`. The dashboard
+2. Generate storm feature CSVs under `06_outputs/ml_ready/`. The dashboard
    auto-detects any file matching `*_features*.csv` and reads metadata from the
    first record.
 
    ```bash
    # Single storm (e.g., Hurricane Ida)
-   python 03_integration/src/feature_pipeline.py AL092021 \
-       --output 03_integration/outputs/al092021_features_complete.csv
+   python 03_integration/src/feature_pipeline.py AL092021
+   # Output: 06_outputs/ml_ready/al092021_features.csv
 
    # Batch process the curated 14-storm set
    python 03_integration/scripts/batch_extract_features.py
+   # Output: 06_outputs/ml_ready/storm_tract_features.csv
    ```
 
    Both commands expect the raw HURDAT2 feed at
-   `01_data_sources/hurdat2/raw/hurdat2-atlantic.txt` and census tracts under
+   `01_data_sources/hurdat2/input_data/hurdat2-atlantic.txt` and census tracts under
    `01_data_sources/census/`.
 
 ## Launching the App
@@ -79,10 +80,10 @@ widgets: `first_entry_time`, `last_exit_time`, `duration_source`, and the
 
 ## Troubleshooting
 
-- **Dashboard shows no storms:** Ensure `_features_complete.csv` files exist in
-  `03_integration/outputs/` and contain the required columns above.
+- **Dashboard shows no storms:** Ensure `_features*.csv` files exist in
+  `06_outputs/ml_ready/` and contain the required columns above.
 - **`ModuleNotFoundError` for Streamlit/Plotly:** Install the new dashboard
   dependencies (see prerequisites) or update your virtualenv.
 - **Feature extraction errors:** Make sure the HURDAT2 feed lives at
-  `01_data_sources/hurdat2/raw/hurdat2-atlantic.txt` and that the census TIGER/Line
-  ZIPs are present under `01_data_sources/census/`.
+  `01_data_sources/hurdat2/input_data/hurdat2-atlantic.txt` and that the census TIGER/Line
+  ZIPs are present under `01_data_sources/census/data/`.
