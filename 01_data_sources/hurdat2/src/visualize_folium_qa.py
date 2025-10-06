@@ -8,6 +8,7 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 import folium
 import pandas as pd
+import numpy as np
 
 try:  # Support both package imports (tests) and direct script execution
     from .parse_raw import parse_hurdat2_file
@@ -45,22 +46,53 @@ def _valid_radii(values: Iterable[Optional[float]]) -> bool:
     return True
 
 
-def create_wind_quadrilateral(
+def create_wind_arc_polygon(
     center_lat: float,
     center_lon: float,
     radii_nm: Dict[str, Optional[float]],
+    num_points_per_arc: int = 30,
 ) -> Optional[List[Tuple[float, float]]]:
-    """Return ordered lat/lon vertices for the quadrilateral or ``None`` if incomplete."""
+    """
+    Create arc-based wind field polygon with proper circular geometry.
 
+    Uses spherical trigonometry to generate smooth arcs for each quadrant,
+    accurately representing the radial nature of HURDAT2 wind fields.
+
+    Args:
+        center_lat: Storm center latitude
+        center_lon: Storm center longitude
+        radii_nm: Dict with 'ne', 'se', 'sw', 'nw' radii in nautical miles
+        num_points_per_arc: Number of points to sample along each 90° arc
+
+    Returns:
+        List of (lat, lon) tuples forming a closed polygon, or None if data incomplete
+    """
     if not _valid_radii(radii_nm.values()):
         return None
 
+    # Define bearing ranges for each quadrant (NE, SE, SW, NW going clockwise)
+    quadrant_bearing_ranges = {
+        "ne": (45.0, 135.0),
+        "se": (135.0, 225.0),
+        "sw": (225.0, 315.0),
+        "nw": (315.0, 405.0),  # Wraps past 360°
+    }
+
     vertices: List[Tuple[float, float]] = []
+
     for quadrant in ("ne", "se", "sw", "nw"):
-        bearing = QUADRANT_BEARINGS[quadrant]
-        distance_nm = float(radii_nm[quadrant])  # type: ignore[arg-type]
-        dest_lon, dest_lat = calculate_destination_point(center_lat, center_lon, bearing, distance_nm)
-        vertices.append((dest_lat, dest_lon))
+        radius = float(radii_nm[quadrant])  # type: ignore[arg-type]
+        start_bearing, end_bearing = quadrant_bearing_ranges[quadrant]
+
+        # Sample points along the arc
+        bearings = np.linspace(start_bearing, end_bearing, num_points_per_arc)
+
+        for bearing in bearings:
+            bearing_normalized = bearing % 360  # Handle NW quadrant wrap
+            dest_lon, dest_lat = calculate_destination_point(
+                center_lat, center_lon, bearing_normalized, radius
+            )
+            vertices.append((dest_lat, dest_lon))
 
     return vertices
 
@@ -85,7 +117,7 @@ def add_wind_field_layer(
             "nw": row.get(f"{prefix}_nw"),
         }
 
-        vertices = create_wind_quadrilateral(row["lat"], row["lon"], radii)
+        vertices = create_wind_arc_polygon(row["lat"], row["lon"], radii)
         if not vertices:
             continue
 
@@ -106,7 +138,7 @@ def add_wind_field_layer(
             fill=True,
             fill_color=color,
             fill_opacity=opacity,
-            popup=folium.Popup(popup_html, max_width=300),
+            popup=folium.Popup(popup_html, max_width=400),  # Increased width for better readability
         ).add_to(layer)
 
     layer.add_to(folium_map)
@@ -159,8 +191,9 @@ def add_track_point_markers(folium_map: folium.Map, track_df: pd.DataFrame) -> f
             label_html = (
                 '<div class="track-point-label" '
                 'style="font-size:10px;font-weight:600;color:#1b263b;'
-                'background:rgba(255,255,255,0.85);padding:2px 4px;'
-                'border-radius:3px;border:1px solid rgba(27,38,59,0.2);">'
+                'background:rgba(255,255,255,0.85);padding:2px 6px;'
+                'border-radius:3px;border:1px solid rgba(27,38,59,0.2);'
+                'white-space:nowrap;min-width:40px;text-align:center;">'  # Prevent wrapping, set min width
                 f"{int(max_wind_value)} kt"
                 "</div>"
             )
@@ -232,6 +265,57 @@ def generate_qa_map(track_df: pd.DataFrame, storm_name: str, storm_id: str, outp
     add_wind_field_layer(folium_map, track_df, 64, color="#ef476f", opacity=0.5)
     add_rmw_layer(folium_map, track_df)
     add_track_point_markers(folium_map, track_df)
+
+    # Add custom legend
+    legend_html = '''
+    <div style="position: fixed;
+                top: 10px; right: 10px; width: 220px;
+                background-color: white; border:2px solid grey; z-index:9999;
+                font-size:12px; padding: 10px; border-radius: 5px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+        <h4 style="margin-top:0; margin-bottom:10px; border-bottom: 1px solid #ddd; padding-bottom: 5px;">
+            Hurricane Wind Field Visualization
+        </h4>
+
+        <p style="margin:5px 0;"><b>Arc-Based Wind Radii:</b></p>
+        <p style="margin:2px 0; padding-left:10px;">
+            <span style="background-color: #ffd166; opacity:0.7; padding: 2px 8px; border-radius:3px;">34 kt</span>
+            Tropical Storm
+        </p>
+        <p style="margin:2px 0; padding-left:10px;">
+            <span style="background-color: #f79d65; opacity:0.8; padding: 2px 8px; border-radius:3px;">50 kt</span>
+            Strong TS
+        </p>
+        <p style="margin:2px 0; padding-left:10px;">
+            <span style="background-color: #ef476f; opacity:0.9; padding: 2px 8px; border-radius:3px;">64 kt</span>
+            Hurricane
+        </p>
+        <p style="margin:2px 0; padding-left:10px;">
+            <span style="background-color: purple; opacity:0.6; padding: 2px 8px; border-radius:3px;">RMW</span>
+            Max Wind Radius
+        </p>
+
+        <p style="margin-top:10px; margin-bottom:5px;"><b>Track Point Colors:</b></p>
+        <p style="margin:2px 0; padding-left:10px;">
+            <span style="color:darkred;">●</span> Cat 5 (≥137 kt) &nbsp;
+            <span style="color:red;">●</span> Cat 4 (≥113 kt)
+        </p>
+        <p style="margin:2px 0; padding-left:10px;">
+            <span style="color:orange;">●</span> Cat 3 (≥96 kt) &nbsp;
+            <span style="color:yellow;">●</span> Cat 1-2 (≥64 kt)
+        </p>
+        <p style="margin:2px 0; padding-left:10px;">
+            <span style="color:green;">●</span> Tropical Storm &nbsp;
+            <span style="color:blue;">●</span> Depression
+        </p>
+
+        <p style="margin-top:10px; font-size:10px; color:#666; border-top:1px solid #eee; padding-top:5px;">
+            <b>Geometry:</b> Arc-based radii use spherical trigonometry
+            for accurate representation of HURDAT2 quadrant wind fields.
+        </p>
+    </div>
+    '''
+    folium_map.get_root().html.add_child(folium.Element(legend_html))
 
     folium.LayerControl(collapsed=False).add_to(folium_map)
 
