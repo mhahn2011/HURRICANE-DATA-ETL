@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -15,7 +15,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(REPO_ROOT / "hurdat2" / "src"))
 
-from envelope_algorithm import calculate_destination_point
+from envelope_algorithm import calculate_destination_point, generate_quadrant_arc_points
 
 
 def interpolate_track_temporal(track_df: pd.DataFrame, interval_minutes: int = 15) -> pd.DataFrame:
@@ -77,21 +77,17 @@ def create_instantaneous_wind_polygon(
     wind_radii_se: float,
     wind_radii_sw: float,
     wind_radii_nw: float,
+    *,
     buffer_deg: float = 0.02,
+    arc_points_per_quadrant: int = 30,
 ) -> Polygon | None:
-    """Create a wind extent polygon from quadrant radii with rounded corners.
+    """Create a wind extent polygon honouring circular quadrant arcs.
 
-    Args:
-        lat: Center latitude
-        lon: Center longitude
-        wind_radii_ne: NE quadrant radius (nautical miles)
-        wind_radii_se: SE quadrant radius (nautical miles)
-        wind_radii_sw: SW quadrant radius (nautical miles)
-        wind_radii_nw: NW quadrant radius (nautical miles)
-        buffer_deg: Buffer distance in degrees to round corners (default 0.02 deg ~= 1.3 nm)
-
-    Returns:
-        Rounded polygon or None if no valid radii
+    The legacy implementation connected a single point per quadrant, forming a
+    chord-based diamond. This variant samples multiple bearings per quadrant to
+    approximate the true arc geometry. When fewer than three quadrants provide
+    radii, we fall back to the buffered chord approach to avoid degenerate
+    polygons.
     """
 
     radii = {
@@ -101,34 +97,63 @@ def create_instantaneous_wind_polygon(
         "nw": wind_radii_nw,
     }
 
-    points: List[Point] = []
-    bearings = {"ne": 45, "se": 135, "sw": 225, "nw": 315}
-
-    for quad, radius in radii.items():
-        if pd.isna(radius) or radius <= 0:
-            continue
-        dest_lon, dest_lat = calculate_destination_point(lat, lon, bearings[quad], radius)
-        points.append(Point(dest_lon, dest_lat))
-
-    if not points:
+    valid_quadrants = [quad for quad, radius in radii.items() if pd.notna(radius) and radius > 0]
+    if not valid_quadrants:
         return None
 
-    # For 1-2 points, already using buffer
-    if len(points) == 1:
-        return points[0].buffer(buffer_deg)
+    # For sparse quadrants the buffered chord method remains more stable.
+    if len(valid_quadrants) <= 2:
+        points: List[Point] = []
+        bearings = {"ne": 45, "se": 135, "sw": 225, "nw": 315}
+        for quad in valid_quadrants:
+            radius = radii[quad]
+            dest_lon, dest_lat = calculate_destination_point(lat, lon, bearings[quad], radius)
+            points.append(Point(dest_lon, dest_lat))
 
-    if len(points) == 2:
+        if len(points) == 1:
+            return points[0].buffer(buffer_deg)
+
         from shapely.geometry import LineString
-        return LineString(points).buffer(buffer_deg)
 
-    # For 3+ points, create polygon then round corners with buffer
-    polygon = Polygon([p.coords[0] for p in points]).convex_hull
+        line = LineString(points)
+        return line.buffer(buffer_deg)
 
-    # Round corners by applying small buffer
-    # This smooths sharp vertices and captures nearby points
-    rounded_polygon = polygon.buffer(buffer_deg)
+    # Build arc-based polygon for well-defined quadrants.
+    arc_coords: List[Tuple[float, float]] = []
+    for quad in ("ne", "se", "sw", "nw"):
+        radius = radii.get(quad)
+        if not pd.notna(radius) or radius <= 0:
+            continue
 
-    return rounded_polygon
+        arc_points = generate_quadrant_arc_points(
+            lat,
+            lon,
+            quad,
+            radius,
+            num_points=arc_points_per_quadrant,
+            include_endpoint=True,
+        )
+
+        if not arc_points:
+            continue
+
+        if arc_coords:
+            # Skip the first point to avoid duplicate coordinates where quadrants meet.
+            arc_coords.extend(arc_points[1:])
+        else:
+            arc_coords.extend(arc_points)
+
+    if len(arc_coords) < 3:
+        from shapely.geometry import LineString
+
+        line = LineString(arc_coords)
+        return line.buffer(buffer_deg)
+
+    polygon = Polygon(arc_coords)
+    if not polygon.is_valid:
+        polygon = polygon.buffer(0)
+
+    return polygon
 
 
 def check_centroid_exposure_over_time(centroid: Point, interpolated_track: pd.DataFrame) -> pd.DataFrame:

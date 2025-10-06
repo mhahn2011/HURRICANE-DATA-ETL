@@ -11,6 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.extend([
     str(REPO_ROOT / "hurdat2" / "src"),
     str(REPO_ROOT / "census" / "src"),
+    str(REPO_ROOT / "hurdat2_census" / "src"),
     str(REPO_ROOT / "integration" / "src"),
 ])
 

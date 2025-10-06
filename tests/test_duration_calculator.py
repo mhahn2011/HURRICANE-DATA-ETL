@@ -51,6 +51,7 @@ def test_duration_for_stationary_point_inside():
     assert duration["duration_in_envelope_hours"] > 0
     assert duration["first_entry_time"] is not None
     assert duration["continuous_exposure"] is True
+    assert duration["duration_source"] == "timeline"
 
 
 def test_duration_for_point_outside():
@@ -62,6 +63,7 @@ def test_duration_for_point_outside():
 
     assert duration["duration_in_envelope_hours"] == 0
     assert duration["first_entry_time"] is None
+    assert duration["duration_source"] == "timeline"
 
 
 def test_duration_for_tract_wrapper():
@@ -71,3 +73,4 @@ def test_duration_for_tract_wrapper():
 
     assert features["duration_in_envelope_hours"] > 0
     assert features["interpolated_points_count"] > 0
+    assert features["duration_source"] in {"timeline", "edge_interpolation"}

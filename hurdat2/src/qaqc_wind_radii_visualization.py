@@ -1,74 +1,30 @@
-"""QA/QC visualization for wind-radii quadrilaterals and duration values.
+"""QA/QC visualization for wind-radii wind fields and duration values.
 
 This script creates an interactive Folium map showing:
-1. All wind-radii quadrilaterals (observed and interpolated at 15-min intervals)
+1. All wind-radii polygons (observed and interpolated at 15-min intervals)
 2. Tract centroids color-coded by duration values
 3. Visual inspection tools for debugging duration calculation issues
 """
 
 import sys
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import Dict, Optional
 import pandas as pd
 import folium
-import numpy as np
-from shapely.geometry import Point, Polygon
+from shapely.geometry import Polygon
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.extend([
     str(REPO_ROOT / "hurdat2" / "src"),
     str(REPO_ROOT / "census" / "src"),
     str(REPO_ROOT / "integration" / "src"),
+    str(REPO_ROOT / "hurdat2_census" / "src"),
 ])
 
 from parse_raw import parse_hurdat2_file
 from profile_clean import clean_hurdat2_data
 from envelope_algorithm import create_storm_envelope, impute_missing_wind_radii
-from duration_calculator import (
-    interpolate_track_temporal,
-    create_instantaneous_wind_polygon,
-)
-
-
-def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
-    hex_color = hex_color.lstrip('#')
-    return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
-
-
-def _interpolate_color(hex_color: str, factor: float) -> str:
-    r, g, b = _hex_to_rgb(hex_color)
-    factor = min(max(factor, 0.0), 1.0)
-    r_new = int(r + (255 - r) * factor)
-    g_new = int(g + (255 - g) * factor)
-    b_new = int(b + (255 - b) * factor)
-    return f"#{r_new:02x}{g_new:02x}{b_new:02x}"
-
-
-def _add_polygon(
-    layer_group: folium.FeatureGroup,
-    polygon: Polygon,
-    color: str,
-    tooltip_html: str,
-    weight: int = 2,
-    dash_array: Optional[str] = None,
-    fill_opacity: float = 0.3,
-) -> None:
-    if polygon is None or polygon.is_empty:
-        return
-
-    coords = list(polygon.exterior.coords)
-    locations = [(lat, lon) for lon, lat in coords]
-
-    folium.Polygon(
-        locations=locations,
-        color=color,
-        weight=weight,
-        fill=True,
-        fill_color=color,
-        fill_opacity=fill_opacity,
-        dash_array=dash_array,
-        tooltip=folium.Tooltip(tooltip_html, sticky=True),
-    ).add_to(layer_group)
+from duration_calculator import interpolate_track_temporal, create_instantaneous_wind_polygon
 
 
 def plot_quadrilateral(
@@ -79,8 +35,9 @@ def plot_quadrilateral(
     has_wind_radii: bool,
     is_imputed: bool,
     layer_group: folium.FeatureGroup,
+    radii: Dict[str, Optional[float]],
 ) -> None:
-    """Add a single wind-radii quadrilateral to the map."""
+    """Add a single wind-radii polygon to the map with wide tooltip."""
 
     if polygon is None:
         return
@@ -105,12 +62,21 @@ def plot_quadrilateral(
         weight = 2
         dash_array = None
 
-    # Create tooltip with timestamp and metadata
-    radii_type = 'IMPUTED (Proportional)' if is_imputed else ('Interpolated' if is_interpolated else 'Observed')
+    def _format_radius(value: Optional[float]) -> str:
+        return f"{value:.0f} nm" if pd.notna(value) else "N/A"
+
+    radii_type = 'IMPUTED (Proportional)' if is_imputed else ('Interpolated (15-min)' if is_interpolated else 'Observed (6-hr)')
     tooltip_html = f"""
-    <b>Time:</b> {timestamp.strftime('%Y-%m-%d %H:%M')}<br>
-    <b>Type:</b> {radii_type}<br>
-    <b>Has Wind Radii:</b> {'Yes' if has_wind_radii else 'No'}
+    <div style="min-width: 320px;">
+        <b>Time:</b> {timestamp.strftime('%Y-%m-%d %H:%M UTC')}<br>
+        <b>Wind Field Type:</b> {radii_type}<br>
+        <b>Geometry:</b> Arc-based radial envelope<br>
+        <b>64kt Wind Radii:</b><br>
+        &nbsp;&nbsp;NE: {_format_radius(radii.get('ne'))}<br>
+        &nbsp;&nbsp;SE: {_format_radius(radii.get('se'))}<br>
+        &nbsp;&nbsp;SW: {_format_radius(radii.get('sw'))}<br>
+        &nbsp;&nbsp;NW: {_format_radius(radii.get('nw'))}
+    </div>
     """
 
     # Extract coordinates for the polygon
@@ -125,7 +91,7 @@ def plot_quadrilateral(
         fill_color=color,
         fill_opacity=fill_opacity,
         dash_array=dash_array,
-        tooltip=folium.Tooltip(tooltip_html, sticky=True),
+        tooltip=folium.Tooltip(tooltip_html, sticky=True, style="min-width: 320px;"),
     ).add_to(layer_group)
 
 
@@ -193,12 +159,12 @@ def create_qaqc_map(storm_id: str = 'AL092021', interval_minutes: int = 15) -> f
     m = folium.Map(location=[center_lat, center_lon], zoom_start=7)
 
     # Create layer groups
-    observed_layer = folium.FeatureGroup(name='Observed Wind-Radii (Solid Blue)', show=True)
-    imputed_layer = folium.FeatureGroup(name='Imputed Wind-Radii (Dashed Orange)', show=True)
-    interpolated_layer = folium.FeatureGroup(name='Temporal Interpolation (Dotted Purple)', show=True)
+    observed_layer = folium.FeatureGroup(name='Observed Wind Field (Arc-Based)', show=True)
+    imputed_layer = folium.FeatureGroup(name='Imputed Wind Field (Arc-Based)', show=True)
+    interpolated_layer = folium.FeatureGroup(name='Interpolated Wind Field (Arc-Based)', show=True)
 
     # Plot all quadrilaterals
-    print("Plotting wind-radii quadrilaterals...")
+    print("Plotting wind-radii polygons...")
     quadrilateral_count = 0
     observed_count = 0
     interpolated_count = 0
@@ -243,6 +209,12 @@ def create_qaqc_map(storm_id: str = 'AL092021', interval_minutes: int = 15) -> f
                 has_wind_radii=has_wind_radii,
                 is_imputed=is_imputed,
                 layer_group=layer,
+                radii={
+                    'ne': row['wind_radii_64_ne'],
+                    'se': row['wind_radii_64_se'],
+                    'sw': row['wind_radii_64_sw'],
+                    'nw': row['wind_radii_64_nw'],
+                },
             )
 
             quadrilateral_count += 1
@@ -251,7 +223,7 @@ def create_qaqc_map(storm_id: str = 'AL092021', interval_minutes: int = 15) -> f
     imputed_layer.add_to(m)
     interpolated_layer.add_to(m)
 
-    print(f"Plotted {quadrilateral_count} quadrilaterals:")
+    print(f"Plotted {quadrilateral_count} wind fields:")
     print(f"  - {observed_count} observed (solid blue)")
     print(f"  - {imputed_count} imputed (dashed orange)")
     print(f"  - {interpolated_count} temporal interpolation (dotted purple)")
@@ -344,30 +316,37 @@ def create_qaqc_map(storm_id: str = 'AL092021', interval_minutes: int = 15) -> f
     # Add layer control
     folium.LayerControl(collapsed=False).add_to(m)
 
-    # Add legend
+    # Add legend (matching specification from WIND_FIELD_VISUALIZATION_IMPROVEMENTS.md)
     legend_html = f'''
-    <div style="position: fixed; top: 10px; right: 10px; width: 280px; background-color: white; z-index:9999; font-size:11px; border:2px solid grey; border-radius: 5px; padding: 10px;">
-        <p style="margin: 0 0 8px 0;"><b>QA/QC Wind-Radii Visualization</b></p>
-        <p style="margin: 8px 0 4px 0;"><b>Quadrilaterals:</b></p>
-        <p style="margin: 3px 0;"><i style="background: darkblue; width: 20px; height: 3px; display: inline-block; opacity: 0.6;"></i> Observed (w/ radii)</p>
-        <p style="margin: 3px 0;"><i style="background: lightgray; width: 20px; height: 3px; display: inline-block; opacity: 0.6;"></i> Observed (no radii)</p>
-        <p style="margin: 3px 0;"><i style="background: purple; width: 20px; height: 3px; display: inline-block; opacity: 0.3; border: 1px dashed purple;"></i> Interpolated (w/ radii)</p>
-        <p style="margin: 3px 0;"><i style="background: gray; width: 20px; height: 3px; display: inline-block; opacity: 0.3; border: 1px dashed gray;"></i> Interpolated (no radii)</p>
-        
-        <p style="margin: 8px 0 4px 0;"><b>Tract Duration (hours):</b></p>
-        <p style="margin: 3px 0;"><i style="background: blue; width: 12px; height: 12px; display: inline-block; border-radius: 50%;"></i> 0 (Problem)</p>
-        <p style="margin: 3px 0;"><i style="background: #FFFFB2; width: 12px; height: 12px; display: inline-block; border-radius: 50%; border: 1px solid #ccc;"></i> &lt; 2</p>
-        <p style="margin: 3px 0;"><i style="background: #FECC5C; width: 12px; height: 12px; display: inline-block; border-radius: 50%;"></i> 2-4</p>
-        <p style="margin: 3px 0;"><i style="background: #FD8D3C; width: 12px; height: 12px; display: inline-block; border-radius: 50%;"></i> 4-6</p>
-        <p style="margin: 3px 0;"><i style="background: #F03B20; width: 12px; height: 12px; display: inline-block; border-radius: 50%;"></i> 6-8</p>
-        <p style="margin: 3px 0;"><i style="background: #BD0026; width: 12px; height: 12px; display: inline-block; border-radius: 50%;"></i> 8-10</p>
-        <p style="margin: 3px 0;"><i style="background: #750021; width: 12px; height: 12px; display: inline-block; border-radius: 50%;"></i> 10+</p>
+    <div style="position: fixed;
+        bottom: 50px; left: 50px; width: 250px;
+        background-color: white; z-index:9999; font-size:14px;
+        border:2px solid grey; border-radius: 5px; padding: 10px">
 
-        <hr style="margin: 8px 0;">
-        <p style="margin: 0; font-size: 10px;">
-            <b>Total Quadrilaterals:</b> {quadrilateral_count}<br>
-            <b>Observed:</b> {observed_count}<br>
-            <b>Interpolated:</b> {interpolated_count}
+        <p style="margin: 0 0 10px 0; font-weight: bold;">Duration in 64kt Winds</p>
+
+        <div style="background: linear-gradient(to right,
+            rgb(0,0,255), rgb(0,255,255), rgb(0,255,0),
+            rgb(255,255,0), rgb(255,0,0));
+            height: 20px; margin-bottom: 5px;"></div>
+
+        <div style="display: flex; justify-content: space-between; font-size: 11px;">
+            <span>0 hrs</span>
+            <span>2 hrs</span>
+            <span>4 hrs</span>
+            <span>6 hrs</span>
+            <span>8+ hrs</span>
+        </div>
+
+        <p style="margin: 10px 0 5px 0; font-size: 12px;"><b>Wind Field Types:</b></p>
+        <p style="margin: 3px 0;">
+            <span style="color: blue; font-weight: bold;">━━━</span> Observed (6-hr data)
+        </p>
+        <p style="margin: 3px 0;">
+            <span style="color: purple; font-weight: bold;">- - -</span> Interpolated (15-min)
+        </p>
+        <p style="margin: 3px 0;">
+            <span style="color: orange; font-weight: bold;">· · ·</span> Imputed (estimated)
         </p>
     </div>
     '''
@@ -380,7 +359,7 @@ def create_qaqc_map(storm_id: str = 'AL092021', interval_minutes: int = 15) -> f
 def main():
     """Generate QA/QC visualization."""
     print("=" * 60)
-    print("QA/QC Wind-Radii Quadrilateral Visualization")
+    print("QA/QC Wind Field Visualization (Arc Geometry)")
     print("=" * 60)
 
     m = create_qaqc_map(storm_id='AL092021', interval_minutes=15)
@@ -393,9 +372,9 @@ def main():
     print(f"✅ QA/QC map saved to: {output_path}")
     print("=" * 60)
     print("\nVisualization includes:")
-    print("  • Observed wind-radii quadrilaterals (solid)")
-    print("  • Interpolated wind-radii quadrilaterals (dashed)")
-    print("  • Tract centroids colored by duration (RED = 0 hrs)")
+    print("  • Observed wind fields with arc-based geometry")
+    print("  • Interpolated/imputed envelopes (dashed/dotted styling)")
+    print("  • Tract centroids colored by duration (legend bottom-left)")
     print("  • Storm envelope and track centerline")
     print("\nUse layer control to toggle different elements")
     print("Hover over elements for detailed information")

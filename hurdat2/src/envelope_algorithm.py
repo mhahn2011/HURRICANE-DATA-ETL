@@ -19,7 +19,7 @@ References:
     • Alpha shapes – Edelsbrunner et al., 1983, “On the Shape of a Set of Points in the Plane”.
 """
 import math
-from typing import Iterable, List
+from typing import Iterable, List, Tuple
 
 import pandas as pd
 import numpy as np
@@ -67,6 +67,61 @@ def calculate_destination_point(lat, lon, bearing, distance_nm):
     )
     
     return (math.degrees(dest_lon_rad), math.degrees(dest_lat_rad))
+
+
+# Bearings defining each quadrant arc (degrees). NW wraps beyond 360 to maintain
+# monotonically increasing bearings around the storm centre.
+QUADRANT_BEARING_RANGES: dict = {
+    "ne": (45.0, 135.0),
+    "se": (135.0, 225.0),
+    "sw": (225.0, 315.0),
+    "nw": (315.0, 405.0),
+}
+
+
+def generate_quadrant_arc_points(
+    lat: float,
+    lon: float,
+    quadrant: str,
+    radius_nm: float,
+    *,
+    num_points: int = 30,
+    include_endpoint: bool = True,
+) -> List[Tuple[float, float]]:
+    """Sample evenly spaced arc points for a quadrant wind radius.
+
+    Args:
+        lat: Storm centre latitude (degrees).
+        lon: Storm centre longitude (degrees).
+        quadrant: Quadrant label (``'ne'``, ``'se'``, ``'sw'``, ``'nw'``).
+        radius_nm: Radius length in nautical miles.
+        num_points: Number of samples along the arc (defaults to 30).
+        include_endpoint: Whether to include the final bearing in the sampling.
+
+    Returns:
+        List of ``(lon, lat)`` coordinate tuples tracing the quadrant arc. Returns an
+        empty list when the radius is missing or non-positive.
+    """
+
+    if not quadrant or quadrant not in QUADRANT_BEARING_RANGES:
+        raise ValueError(f"Unsupported quadrant '{quadrant}'")
+
+    if not pd.notna(radius_nm) or radius_nm <= 0:
+        return []
+
+    # Ensure at least two samples so downstream code can form a LineString when
+    # only one quadrant is available.
+    sample_count = max(2, int(num_points))
+
+    start_bearing, end_bearing = QUADRANT_BEARING_RANGES[quadrant]
+    bearings = np.linspace(start_bearing, end_bearing, sample_count, endpoint=include_endpoint)
+
+    points: List[Tuple[float, float]] = []
+    for bearing in bearings:
+        dest_lon, dest_lat = calculate_destination_point(lat, lon, bearing % 360.0, radius_nm)
+        points.append((dest_lon, dest_lat))
+
+    return points
 
 
 def identify_imputable_segments(storm_track: pd.DataFrame, wind_threshold: str = "64kt") -> pd.Series:
@@ -280,18 +335,20 @@ def nm_to_degrees(nautical_miles, latitude):
 
 # --- REFACTORED: Use accurate destination calculation ---
 
-def get_wind_extent_points(track_point, wind_threshold='34kt'):
-    """
-    Get all 4-directional wind extent points using accurate spherical trigonometry.
+def get_wind_extent_points(track_point, wind_threshold='34kt', samples_per_quadrant: int = 30):
+    """Return sampled wind-extent points along each quadrant arc.
+
+    The legacy implementation returned a single point per quadrant which formed a
+    diamond-like polygon. Sampling along the true circular arcs produces a point
+    cloud that more faithfully represents the HURDAT2 specification and dramatically
+    reduces envelope underestimation.
     """
     lat, lon = track_point['lat'], track_point['lon']
-    max_wind = track_point.get('max_wind', 0)
-    bearings = {'ne': 45, 'se': 135, 'sw': 225, 'nw': 315}
     extent_points = []
 
     prefix = wind_threshold.replace("kt", "")
 
-    for direction, bearing in bearings.items():
+    for direction in ('ne', 'se', 'sw', 'nw'):
         radius_col = f"wind_radii_{prefix}_{direction}"
         imputed_col = f"{radius_col}_imputed"
         flag_col = f"{radius_col}_was_imputed"
@@ -306,18 +363,29 @@ def get_wind_extent_points(track_point, wind_threshold='34kt'):
         if not pd.notna(radius) or radius <= 0:
             continue
 
-        dest_lon, dest_lat = calculate_destination_point(lat, lon, bearing, radius)
-
-        extent_points.append(
-            {
-                'lat': dest_lat,
-                'lon': dest_lon,
-                'direction': direction,
-                'radius': radius,
-                'wind_threshold': wind_threshold,
-                'was_imputed': was_imputed,
-            }
+        arc_points = generate_quadrant_arc_points(
+            lat,
+            lon,
+            direction,
+            radius,
+            num_points=samples_per_quadrant,
+            include_endpoint=True,
         )
+
+        for idx, (dest_lon, dest_lat) in enumerate(arc_points):
+            extent_points.append(
+                {
+                    'lat': dest_lat,
+                    'lon': dest_lon,
+                    'direction': direction,
+                    'radius': radius,
+                    'wind_threshold': wind_threshold,
+                    'was_imputed': was_imputed,
+                    'bearing_index': idx,
+                    'samples_per_quadrant': samples_per_quadrant,
+                    'point_type': 'arc_sample',
+                }
+            )
 
     return extent_points
 
